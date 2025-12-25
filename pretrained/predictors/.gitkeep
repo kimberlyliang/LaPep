@@ -1,0 +1,5 @@
+# This directory should contain:
+# - binding-affinity.pt (Binding affinity predictor from TR2-D2)
+# - toxicity_predictor.pkl (Optional)
+# - halflife_predictor.pkl (Optional)
+

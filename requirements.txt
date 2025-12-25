@@ -1,0 +1,38 @@
+# Core dependencies
+torch>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Transformers for Qwen embeddings
+transformers>=4.35.0
+accelerate>=0.24.0
+sentencepiece>=0.1.99  # Required for some tokenizers
+
+# TR2-D2 dependencies (for real models)
+pandas>=2.0.0  # Required for TR2-D2 binding predictor
+pytorch-lightning>=2.0.0  # Required for TR2-D2 Diffusion model
+lightning>=2.0.0  # PyTorch Lightning (same as pytorch-lightning)
+fair-esm>=2.0.0  # Required for protein embeddings in binding predictor
+torchmetrics>=0.11.0  # Required for TR2-D2 Diffusion
+hydra-core>=1.3.0  # Required for config loading
+omegaconf>=2.3.0  # Required for Hydra configs
+timm>=0.9.0  # Required for TR2-D2 scheduler (CosineLRScheduler)
+SmilesPE>=0.0.3  # Required for TR2-D2 SMILES tokenizer (latest is 0.0.3)
+fsspec>=2023.0.0  # Required for TR2-D2 utils (file system operations)
+
+# Optional but recommended
+tqdm>=4.66.0  # Progress bars
+pyyaml>=6.0  # For YAML config files
+
+# For evaluation and analysis
+scikit-learn>=1.3.0  # For statistical tests if needed
+
+# For logging and visualization
+matplotlib>=3.7.0  # For plotting training curves and results
+pandas>=2.0.0  # Already included above, but used for CSV export
+
+# Optional: For peptide analysis/visualization (utils/app.py)
+# Uncomment if you need peptide structure analysis features:
+# rdkit-pypi>=2023.0.0  # For SMILES molecule manipulation
+# Pillow>=10.0.0  # For image processing
+

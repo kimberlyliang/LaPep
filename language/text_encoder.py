@@ -2,6 +2,26 @@ import torch
 import torch.nn as nn
 from typing import Union, Optional
 import numpy as np
+import os
+
+# Set Hugging Face cache to /scratch if available (more space than home directory)
+# This must be set BEFORE importing transformers
+_scratch_cache_set = False
+if not _scratch_cache_set:
+    if os.path.exists('/scratch'):
+        # Use /scratch for cache (typically has more space than home directory)
+        scratch_cache = '/scratch/pranamlab/kimberly/.cache/huggingface'
+        try:
+            os.makedirs(scratch_cache, exist_ok=True)
+            # Set environment variables for Hugging Face cache
+            os.environ['HF_HOME'] = scratch_cache
+            os.environ['TRANSFORMERS_CACHE'] = scratch_cache
+            os.environ['HF_HUB_CACHE'] = scratch_cache
+            _scratch_cache_set = True
+            print(f"[Cache] Using /scratch for Hugging Face cache: {scratch_cache}")
+        except (PermissionError, OSError) as e:
+            print(f"[Cache] Warning: Could not set cache to /scratch: {e}")
+            print(f"[Cache] Using default cache location: ~/.cache/huggingface")
 
 
 class TextEncoder:

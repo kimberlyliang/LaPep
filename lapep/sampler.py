@@ -44,24 +44,19 @@ def sample_peptide(
         np.random.seed(seed)
         torch.manual_seed(seed)
     
-    # Initialize from base generator prior
     x = base_generator.sample_initial_state()
     
-    # Sample trajectory
     for step in range(num_steps):
         tau = step
         
-        # Get candidate states (neighbors + self)
         candidates = base_generator.get_neighbors(x) + [x]
         
-        # Compute transition probabilities
         probs = compute_transition_kernel(
             x, candidates, base_generator,
             text_encoder, preference_net, predictors,
             prompt, tau, constraints, use_linear_preferences
         )
         
-        # Sample next state
         x = np.random.choice(candidates, p=probs)
     
     return x
@@ -95,17 +90,14 @@ def sample_step(
     Returns:
         Next state
     """
-    # Get candidates
     candidates = base_generator.get_neighbors(current_state) + [current_state]
     
-    # Compute transition probabilities
     probs = compute_transition_kernel(
         current_state, candidates, base_generator,
         text_encoder, preference_net, predictors,
         prompt, tau, constraints, use_linear_preferences
     )
-    
-    # Sample
+
     next_state = np.random.choice(candidates, p=probs)
     
     return next_state

@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 import sys
 
-# Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from generators.base_generator import load_base_generator
@@ -33,17 +32,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Load config
     with open(args.config, 'r') as f:
         config = json.load(f)
     
-    # Load models
     print("Loading models...")
     base_generator = load_base_generator(config['base_generator_path'])
     text_encoder = load_text_encoder(config['text_encoder_name'])
     preference_net = load_preference_net(config['preference_net_path'])
     
-    # Load predictors
     predictors = {}
     for pred_name, pred_config in config['predictors'].items():
         if pred_name == 'binding':
@@ -53,10 +49,8 @@ def main():
         elif pred_name == 'halflife':
             predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
     
-    # Get constraints
     constraints = config.get('constraints', {})
     
-    # Generate samples
     print(f"Generating {args.num_samples} peptides...")
     peptides = []
     for i in range(args.num_samples):
@@ -74,7 +68,6 @@ def main():
         )
         peptides.append(peptide)
     
-    # Save
     output_path = Path(args.output)
     with open(output_path, 'w') as f:
         for peptide in peptides:

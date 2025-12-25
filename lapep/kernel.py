@@ -44,13 +44,12 @@ def compute_transition_kernel(
     Returns:
         Array of probabilities for each candidate (normalized)
     """
-    # Compute potential at current state
+    # potential at current state
     U_x = compute_potential(
         x, prompt, predictors, text_encoder, preference_net,
         constraints, use_linear_preferences
     )
     
-    # Get base proposal probabilities
     base_probs = []
     for candidate in candidates:
         prob = base_generator.proposal_probability(candidate, x, tau)
@@ -58,26 +57,25 @@ def compute_transition_kernel(
     
     base_probs = np.array(base_probs)
     
-    # Compute unnormalized weights with potential tilt
+    # unnormalized weights with potential tilt
     log_weights = []
     for candidate in candidates:
-        # Compute potential at candidate state
         U_candidate = compute_potential(
             candidate, prompt, predictors, text_encoder, preference_net,
             constraints, use_linear_preferences
         )
         
-        # Base log probability
+        # base log probability
         idx = candidates.index(candidate)
         log_base = np.log(base_probs[idx] + 1e-10)
         
-        # Potential tilt: 0.5 * [U(x) - U(x')]
+        # 0.5 * [U(x) - U(x')]
         potential_tilt = 0.5 * (U_x - U_candidate)
         
         log_weight = log_base + potential_tilt
         log_weights.append(log_weight)
     
-    # Normalize via log-sum-exp for numerical stability
+    # normalize via log-sum-exp for numerical stability
     log_weights = np.array(log_weights)
     log_Z = np.logaddexp.reduce(log_weights)
     log_probs = log_weights - log_Z
@@ -115,14 +113,14 @@ def compute_edge_flow(
     Returns:
         Edge flow value
     """
-    # Compute transition probabilities in both directions
-    candidates_forward = [x_prime, x]  # Include self-transition
+    # compute transition probabilities in both directions
+    candidates_forward = [x_prime, x] 
     probs_forward = compute_transition_kernel(
         x, candidates_forward, base_generator,
         text_encoder, preference_net, predictors,
         prompt, tau, constraints
     )
-    q_forward = probs_forward[0]  # Probability of x -> x'
+    q_forward = probs_forward[0]  # probability of x -> x'
     
     candidates_backward = [x, x_prime]
     probs_backward = compute_transition_kernel(
@@ -130,9 +128,9 @@ def compute_edge_flow(
         text_encoder, preference_net, predictors,
         prompt, tau, constraints
     )
-    q_backward = probs_backward[0]  # Probability of x' -> x
+    q_backward = probs_backward[0]  # probability of x' -> x
     
-    # Edge flow
+    # edge flow
     if q_forward > 0 and q_backward > 0:
         flow = np.log(q_forward / q_backward)
     else:

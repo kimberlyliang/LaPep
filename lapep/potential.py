@@ -34,10 +34,8 @@ def compute_potential(
     Returns:
         Scalar potential value (lower is better)
     """
-    # Compute constraint penalty Ψ(x)
     psi = compute_constraint_penalty(x, predictors, constraints)
-    
-    # Compute language preference R(x;t)
+
     if prompt is not None and text_encoder is not None and preference_net is not None:
         r = compute_preference_score(
             x, prompt, predictors, text_encoder, preference_net, use_linear_preferences
@@ -45,7 +43,6 @@ def compute_potential(
     else:
         r = 0.0
     
-    # LaPep potential
     U = -r + psi
     
     return U
@@ -83,19 +80,10 @@ def compute_constraint_penalty(
     total_penalty = 0.0
     
     for pred_name, predictor in predictors.items():
-        # Get raw prediction
         raw_value = predictor.predict(x)
-        
-        # Normalize to [0, 1] using empirical CDF
         normalized = predictor.normalize(raw_value)
-        
-        # Get weight (default to 1.0)
         weight = weights.get(pred_name, 1.0) * strength
-        
-        # Get penalty function (default to squared distance from target)
         penalty_fn = penalties.get(pred_name, default_penalty_function)
-        
-        # Compute penalty
         penalty = penalty_fn(normalized, pred_name)
         total_penalty += weight * penalty
     
@@ -134,7 +122,6 @@ def default_penalty_function(u: float, pred_name: str) -> float:
         return 0.0
     
     else:
-        # Generic: no penalty
         return 0.0
 
 
@@ -160,16 +147,11 @@ def compute_preference_score(
     Returns:
         Preference score (higher is better)
     """
-    # Encode prompt
     prompt_embedding = text_encoder.encode(prompt)
-    
-    # Get preference parameters
     if isinstance(prompt_embedding, torch.Tensor):
-        prompt_embedding = prompt_embedding.unsqueeze(0)  # Add batch dimension
+        prompt_embedding = prompt_embedding.unsqueeze(0)
     
     eta = preference_net(prompt_embedding)
-    
-    # Compute normalized predictor coordinates u(x)
     u = []
     for pred_name, predictor in predictors.items():
         raw_value = predictor.predict(x)
@@ -178,7 +160,7 @@ def compute_preference_score(
     
     u = np.array(u)
     
-    # Apply preference functional
+    #  preference functional
     if use_linear_preferences:
         # Linear: R(x;t) = η^T u
         if isinstance(eta, torch.Tensor):
@@ -186,15 +168,13 @@ def compute_preference_score(
         else:
             eta_np = np.array(eta).flatten()
         
-        # Ensure dimensions match
         if len(eta_np) == len(u):
             score = np.dot(eta_np, u)
         else:
-            # Use first len(u) components or pad u
             min_len = min(len(eta_np), len(u))
             score = np.dot(eta_np[:min_len], u[:min_len])
     else:
-        # Nonlinear preference functional
+        # nonlinear preference functional
         score = apply_nonlinear_preference(u, eta)
     
     return float(score)
@@ -213,9 +193,6 @@ def apply_nonlinear_preference(
     if isinstance(eta, torch.Tensor):
         eta = eta.detach().cpu().numpy()
     
-    # Simple nonlinear transformation
-    # In practice, this would be a learned neural network
-    # For now, use a quadratic form with learned parameters
     
     if len(eta.shape) == 1:
         # Assume eta defines a quadratic form: u^T diag(eta) u + linear term
@@ -227,6 +204,5 @@ def apply_nonlinear_preference(
         if len(eta.shape) == 2 and eta.shape[0] == len(u) and eta.shape[1] == len(u):
             return float(u @ eta @ u)
         else:
-            # Fallback to linear
             eta_flat = eta.flatten() if len(eta.shape) > 1 else eta
             return float(np.dot(eta_flat[:len(u)], u))

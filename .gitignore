@@ -52,3 +52,5 @@ eval_results/
 # Local TR2-D2 copy (we use lapep/tr2d2 instead)
 tr2d2-pep/
 
+*.ckpt
+*.png

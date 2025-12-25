@@ -42,18 +42,46 @@ class TextEncoder:
     
     def _encode_qwen(self, text: list) -> torch.Tensor:
         from transformers import AutoTokenizer, AutoModel
+        import transformers
         
         model_id = self._get_qwen_model_id()
         is_embedding_model = 'embedding' in model_id.lower() or 'embed' in self.model_name.lower()
         
+        # Check transformers version for Qwen3
+        if 'qwen3' in model_id.lower():
+            transformers_version = transformers.__version__
+            try:
+                from packaging import version
+                if version.parse(transformers_version) < version.parse('4.51.0'):
+                    print(f"Warning: Qwen3 requires transformers>=4.51.0, but you have {transformers_version}")
+                    print("Please upgrade: pip install --upgrade transformers")
+            except ImportError:
+                pass  # packaging not available, skip version check
+        
         if not hasattr(self, '_qwen_tokenizer'):
             print(f"Loading Qwen tokenizer for {model_id}...")
-            self._qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
+            try:
+                self._qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
+            except OSError as e:
+                print(f"Error: Model {model_id} not found on Hugging Face.")
+                print(f"Falling back to E5 text encoder instead.")
+                # Switch to E5 encoding
+                self.model_name = 'e5'
+                return self._encode_e5(text)
+            
             if self.model is None or isinstance(self.model, nn.Module):
                 load_device = 'cpu' if (not torch.cuda.is_available() or self.device == 'cpu') else self.device
                 
                 print(f"Loading Qwen model {model_id} (this may take a minute on first run)...")
-                self.model = AutoModel.from_pretrained(model_id)
+                try:
+                    self.model = AutoModel.from_pretrained(model_id)
+                except OSError as e:
+                    print(f"Error: Model {model_id} not found on Hugging Face.")
+                    print(f"Falling back to E5 text encoder instead.")
+                    # Switch to E5 encoding
+                    self.model_name = 'e5'
+                    return self._encode_e5(text)
+                
                 self.model.eval()
                 if load_device != 'cpu' and torch.cuda.is_available():
                     try:
@@ -98,9 +126,26 @@ class TextEncoder:
         return embeddings
     
     def _get_qwen_model_id(self) -> str:
-        if 'qwen3' in self.model_name.lower() or 'embedding' in self.model_name.lower():
+        if 'qwen3' in self.model_name.lower() and 'embedding' in self.model_name.lower():
+            # Qwen3-Embedding models are real embedding models
             if '0.6b' in self.model_name.lower() or '0.6B' in self.model_name.lower():
                 return "Qwen/Qwen3-Embedding-0.6B"
+            if '4b' in self.model_name.lower() or '4B' in self.model_name.lower():
+                return "Qwen/Qwen3-Embedding-4B"
+            if '8b' in self.model_name.lower() or '8B' in self.model_name.lower():
+                return "Qwen/Qwen3-Embedding-8B"
+            # Default to 0.6B if size not specified
+            return "Qwen/Qwen3-Embedding-0.6B"
+        
+        if 'qwen3' in self.model_name.lower():
+            # Qwen3 (without "Embedding") are causal LMs - extract embeddings from hidden states
+            if '0.6b' in self.model_name.lower() or '0.6B' in self.model_name.lower():
+                return "Qwen/Qwen3-0.6B"
+            return "Qwen/Qwen3-0.6B"
+        
+        if 'embedding' in self.model_name.lower() or 'embed' in self.model_name.lower():
+            # Other embedding models - try Qwen2.5-Instruct as fallback
+            print("Warning: Unspecified embedding model. Using Qwen/Qwen3-Embedding-0.6B.")
             return "Qwen/Qwen3-Embedding-0.6B"
         
         if '/' in self.model_name and 'Qwen' in self.model_name:

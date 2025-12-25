@@ -3,8 +3,8 @@ torch>=2.0.0
 numpy>=1.24.0
 scipy>=1.10.0
 
-# Transformers for Qwen embeddings
-transformers>=4.35.0
+# Transformers for Qwen embeddings (>=4.51.0 required for Qwen3)
+transformers>=4.51.0
 accelerate>=0.24.0
 sentencepiece>=0.1.99
 protobuf>=3.20.0

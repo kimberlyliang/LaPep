@@ -981,22 +981,36 @@ def main():
         config = json.load(f)
     
     # Load frozen models
-    print("Loading frozen models...")
+    print("=" * 80)
+    print("LOADING MODELS FOR TRAINING")
+    print("=" * 80)
+    
     # Auto-detect device: use CPU if CUDA not available, even if --device cuda is specified
     if args.device == 'cuda' and not torch.cuda.is_available():
         print("Warning: CUDA not available, using CPU instead")
         actual_device = 'cpu'
     else:
         actual_device = args.device
+    
+    print(f"\n[Device] Using device: {actual_device}")
+    if actual_device.startswith('cuda'):
+        print(f"[Device] CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"[Device] CUDA device: {torch.cuda.get_device_name(0)}")
+    
+    print(f"\n[Text Encoder] Loading text encoder: {config['text_encoder_name']}")
     text_encoder = load_text_encoder(config['text_encoder_name'], device=actual_device)
+    print(f"[Text Encoder] Loaded successfully on {text_encoder.device}")
     # Text encoder is already frozen (model set to eval mode in __init__)
     
     # Load frozen predictors
+    print(f"\n[Predictors] Loading {len(config['predictors'])} predictor(s)...")
     predictors = {}
     # Get protein sequence from config if available (for binding predictor)
     protein_seq = config.get('protein_seq', None)
     
     for pred_name, pred_config in config['predictors'].items():
+        print(f"[Predictors] Loading {pred_name} predictor from: {pred_config['path']}")
         if pred_name == 'binding':
             # Try to load real binding predictor if protein_seq is provided
             predictors['binding'] = BindingPredictor.load(
@@ -1004,14 +1018,19 @@ def main():
                 protein_seq=protein_seq,
                 device=actual_device
             )
+            print(f"[Predictors] Binding predictor loaded on {predictors['binding'].device}")
         elif pred_name == 'toxicity':
             predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'])
+            print(f"[Predictors] Toxicity predictor loaded")
         elif pred_name == 'halflife':
             predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
+            print(f"[Predictors] Half-life predictor loaded")
     
     # Load frozen base generator
+    print(f"\n[Base Generator] Loading base generator from: {config['base_generator_path']}")
     from generators.base_generator import load_base_generator
     base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
+    print(f"[Base Generator] Loaded successfully")
     
     # Get prompts from config or use defaults
     prompts = config.get('training_prompts', [
@@ -1022,7 +1041,7 @@ def main():
     
     # Initialize preference network (only trainable component)
     # Get embedding dimension from text encoder
-    print("Detecting embedding dimension...")
+    print(f"\n[Preference Network] Detecting embedding dimension...")
     print("(This may take a moment to load the Qwen model on first run...)")
     try:
         import time
@@ -1030,21 +1049,34 @@ def main():
         test_embedding = text_encoder.encode("test")
         elapsed = time.time() - start_time
         embedding_dim = test_embedding.shape[-1]
-        print(f"Detected embedding dimension: {embedding_dim} (took {elapsed:.2f}s)")
+        print(f"[Preference Network] Detected embedding dimension: {embedding_dim} (took {elapsed:.2f}s)")
     except Exception as e:
-        print(f"Warning: Could not detect embedding dimension: {e}")
+        print(f"[Preference Network] Warning: Could not detect embedding dimension: {e}")
         import traceback
         traceback.print_exc()
         # Fallback to default for Qwen3-Embedding-0.6B
         embedding_dim = 1024
-        print(f"Using default embedding dimension: {embedding_dim}")
+        print(f"[Preference Network] Using default embedding dimension: {embedding_dim}")
+    
+    hidden_dim = config.get('hidden_dim', 256)
+    output_dim = config.get('output_dim', 64)
+    num_predictors = len(predictors)
+    
+    print(f"\n[Preference Network] Initializing preference network:")
+    print(f"  - Input dimension (embedding): {embedding_dim}")
+    print(f"  - Hidden dimension: {hidden_dim}")
+    print(f"  - Output dimension: {output_dim}")
+    print(f"  - Number of predictors: {num_predictors}")
     
     preference_net = PreferenceNet(
         input_dim=embedding_dim,  # Auto-detect from text encoder
-        hidden_dim=config.get('hidden_dim', 256),
-        output_dim=config.get('output_dim', 64),
-        num_predictors=len(predictors)
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        num_predictors=num_predictors
     )
+    preference_net = preference_net.to(actual_device)
+    print(f"[Preference Network] Preference network created and moved to {actual_device}")
+    print("=" * 80)
     
     # Optional LLM judge
     llm_judge = None
@@ -1060,7 +1092,20 @@ def main():
             args.judge_method = 'rule_based'
     
     # Train
-    print("Training preference network...")
+    print("\n" + "=" * 80)
+    print("STARTING TRAINING")
+    print("=" * 80)
+    print(f"[Training Config]")
+    print(f"  - Epochs: {args.epochs}")
+    print(f"  - Batch size: {args.batch_size}")
+    print(f"  - Learning rate: {args.lr}")
+    print(f"  - Peptides per batch: {args.peptides_per_batch}")
+    print(f"  - Judge method: {args.judge_method}")
+    print(f"  - Device: {actual_device}")
+    print(f"  - Number of training prompts: {len(prompts)}")
+    print(f"  - Output directory: {args.output_dir}")
+    print("=" * 80)
+    print("\nTraining preference network...")
     trained_net = train_preference_network(
         preference_net,
         text_encoder,

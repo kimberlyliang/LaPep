@@ -36,8 +36,10 @@ class PreferenceNet(nn.Module):
         return eta
 
 
-def load_preference_net(path: str) -> PreferenceNet:
-    checkpoint = torch.load(path, map_location='cpu')
+def load_preference_net(path: str, device: Optional[str] = None) -> PreferenceNet:
+    # Load to CPU first, then move to device (safer for large models)
+    load_device = 'cpu'
+    checkpoint = torch.load(path, map_location=load_device)
     model = PreferenceNet(
         input_dim=checkpoint.get('input_dim', 768),
         hidden_dim=checkpoint.get('hidden_dim', 256),
@@ -53,4 +55,12 @@ def load_preference_net(path: str) -> PreferenceNet:
         model.load_state_dict(checkpoint)
     
     model.eval()
+    
+    # Move to device if specified
+    if device and device != 'cpu':
+        if torch.cuda.is_available():
+            model = model.to(device)
+        else:
+            print(f"Warning: CUDA not available, keeping model on CPU")
+    
     return model

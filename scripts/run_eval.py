@@ -1,12 +1,12 @@
 """
 Main evaluation script for LaPep experiments.
 
-Runs all experiments from the paper:
-1. Language conditioning effect (Section 4.1)
-2. Path independence and stability (Section 4.2)
-3. Unlabeled objective control (Section 4.3)
-4. Ablation studies (Section 4.4)
-5. Generality across base generators (Section 4.5)
+experiments from the paper:
+1. language conditioning effect (Section 4.1)
+2. path independence and stability (Section 4.2)
+3. unlabeled objective control (Section 4.3)
+4. ablation studies (Section 4.4)
+5. generality across base generators (Section 4.5)
 """
 
 import argparse
@@ -42,20 +42,23 @@ def load_models(config_path: str, device: str = 'cuda'):
         config = json.load(f)
     
     from generators.base_generator import load_base_generator
-    base_generator = load_base_generator(config['base_generator_path'])
+    base_generator = load_base_generator(config['base_generator_path'], device=device)
     
     from language.text_encoder import load_text_encoder
     text_encoder = load_text_encoder(config['text_encoder_name'], device=device)
     
     from language.preference_net import load_preference_net
-    preference_net = load_preference_net(config['preference_net_path'])
-    preference_net = preference_net.to(device)
+    preference_net = load_preference_net(config['preference_net_path'], device=device)
     
     predictors = {}
     for pred_name, pred_config in config['predictors'].items():
         if pred_name == 'binding':
             from predictors.binding import BindingPredictor
-            predictors['binding'] = BindingPredictor.load(pred_config['path'])
+            predictors['binding'] = BindingPredictor.load(
+                pred_config['path'], 
+                device=device,
+                protein_seq=config.get('protein_seq')
+            )
         elif pred_name == 'toxicity':
             from predictors.toxicity import ToxicityPredictor
             predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'])

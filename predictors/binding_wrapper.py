@@ -95,10 +95,6 @@ class RealBindingPredictor(BindingPredictor):
                     import shutil
                     shutil.copy2(model_path, expected_path)
         
-        if self.tokenizer is None:
-            from transformers import AutoTokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained('aaronfeller/PeptideCLM-23M-all')
-        
         self.binding_model = BindingAffinity(
             prot_seq=self.protein_seq,
             tokenizer=self.tokenizer,

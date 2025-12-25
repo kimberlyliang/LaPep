@@ -124,10 +124,30 @@ class BindingAffinity:
         # peptide embeddings
         if emb_model is not None: 
             self.pep_model = emb_model.to(self.device).eval()
+            full_model = None
         else:
-            self.pep_model = AutoModelForMaskedLM.from_pretrained('aaronfeller/PeptideCLM-23M-all').roformer.to(self.device).eval()
+            full_model = AutoModelForMaskedLM.from_pretrained('aaronfeller/PeptideCLM-23M-all')
+            self.pep_model = full_model.roformer.to(self.device).eval()
         
-        self.pep_tokenizer = tokenizer
+        if tokenizer is None:
+            from transformers import AutoTokenizer
+            try:
+                if full_model is not None and hasattr(full_model, 'tokenizer') and full_model.tokenizer is not None:
+                    self.pep_tokenizer = full_model.tokenizer
+                elif full_model is not None and hasattr(full_model, 'roformer') and hasattr(full_model.roformer, 'tokenizer'):
+                    self.pep_tokenizer = full_model.roformer.tokenizer
+                else:
+                    self.pep_tokenizer = AutoTokenizer.from_pretrained('aaronfeller/PeptideCLM-23M-all', trust_remote_code=True)
+            except Exception as e:
+                print(f"Warning: Could not load tokenizer: {e}")
+                if full_model is not None and hasattr(full_model, 'tokenizer'):
+                    self.pep_tokenizer = full_model.tokenizer
+                elif full_model is not None and hasattr(full_model, 'roformer') and hasattr(full_model.roformer, 'tokenizer'):
+                    self.pep_tokenizer = full_model.roformer.tokenizer
+                else:
+                    raise ValueError(f"Could not initialize tokenizer: {e}")
+        else:
+            self.pep_tokenizer = tokenizer
 
         self.model = ImprovedBindingPredictor().to(self.device)
         

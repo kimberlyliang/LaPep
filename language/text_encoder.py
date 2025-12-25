@@ -82,9 +82,15 @@ class TextEncoder:
             print(f"Loading Qwen tokenizer for {model_id}...")
             try:
                 self._qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
+                print(f"[Text Encoder] Tokenizer loaded successfully")
             except OSError as e:
-                print(f"Error: Model {model_id} not found on Hugging Face.")
-                print(f"Falling back to E5 text encoder instead.")
+                print(f"[Text Encoder] Error loading tokenizer: {e}")
+                print(f"[Text Encoder] This might be due to:")
+                print(f"  - Transformers version < 4.51.0 (current: {transformers.__version__})")
+                print(f"  - Network/authentication issues")
+                print(f"  - Disk quota issues (check cache location)")
+                print(f"[Text Encoder] Falling back to E5 text encoder instead.")
+                print(f"[Text Encoder] WARNING: E5 has 768 dimensions, but preference network may expect 1024!")
                 # Switch to E5 encoding
                 self.model_name = 'e5'
                 return self._encode_e5(text)
@@ -95,9 +101,15 @@ class TextEncoder:
                 print(f"Loading Qwen model {model_id} (this may take a minute on first run)...")
                 try:
                     self.model = AutoModel.from_pretrained(model_id)
+                    print(f"[Text Encoder] Model loaded successfully")
                 except OSError as e:
-                    print(f"Error: Model {model_id} not found on Hugging Face.")
-                    print(f"Falling back to E5 text encoder instead.")
+                    print(f"[Text Encoder] Error loading model: {e}")
+                    print(f"[Text Encoder] This might be due to:")
+                    print(f"  - Transformers version < 4.51.0 (current: {transformers.__version__})")
+                    print(f"  - Network/authentication issues")
+                    print(f"  - Disk quota issues (check cache location: {os.environ.get('HF_HOME', '~/.cache/huggingface')})")
+                    print(f"[Text Encoder] Falling back to E5 text encoder instead.")
+                    print(f"[Text Encoder] WARNING: E5 has 768 dimensions, but preference network may expect 1024!")
                     # Switch to E5 encoding
                     self.model_name = 'e5'
                     return self._encode_e5(text)

@@ -47,8 +47,28 @@ def load_models(config_path: str, device: str = 'cuda'):
     from language.text_encoder import load_text_encoder
     text_encoder = load_text_encoder(config['text_encoder_name'], device=device)
     
+    # Check embedding dimension
+    test_embedding = text_encoder.encode("test")
+    actual_embedding_dim = test_embedding.shape[-1]
+    print(f"[Model Check] Text encoder embedding dimension: {actual_embedding_dim}")
+    
     from language.preference_net import load_preference_net
     preference_net = load_preference_net(config['preference_net_path'], device=device)
+    
+    # Check if dimensions match
+    if preference_net.input_dim != actual_embedding_dim:
+        print(f"[Model Check] WARNING: Dimension mismatch!")
+        print(f"  - Preference network expects: {preference_net.input_dim} dimensions")
+        print(f"  - Text encoder provides: {actual_embedding_dim} dimensions")
+        print(f"  - This will cause a RuntimeError during inference")
+        print(f"  - Solution: Ensure text encoder matches the one used during training")
+        raise ValueError(
+            f"Embedding dimension mismatch: preference_net expects {preference_net.input_dim} "
+            f"but text_encoder provides {actual_embedding_dim}. "
+            f"Make sure you're using the same text encoder that was used during training."
+        )
+    else:
+        print(f"[Model Check] ✓ Embedding dimensions match: {actual_embedding_dim}")
     
     predictors = {}
     for pred_name, pred_config in config['predictors'].items():

@@ -9,9 +9,9 @@ import numpy as np
 from typing import Dict, List, Optional, Callable
 import torch
 
-from ..lapep.potential import compute_potential
-from ..lapep.sampler import sample_peptide
-from ..lapep.kernel import compute_transition_kernel
+from lapep.potential import compute_potential
+from lapep.sampler import sample_peptide
+from lapep.kernel import compute_transition_kernel
 
 
 def run_ablation_studies(

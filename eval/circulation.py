@@ -10,8 +10,8 @@ from typing import List, Tuple, Dict, Optional
 import torch
 from collections import defaultdict
 
-from ..lapep.kernel import compute_transition_kernel
-from ..lapep.potential import compute_potential
+from lapep.kernel import compute_transition_kernel
+from lapep.potential import compute_potential
 
 
 def evaluate_path_independence(

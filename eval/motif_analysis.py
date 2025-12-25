@@ -10,7 +10,7 @@ from typing import List, Dict, Optional, Set
 import re
 from collections import Counter, defaultdict
 
-from ..lapep.sampler import sample_peptide
+from lapep.sampler import sample_peptide
 
 
 # Common peptide motifs and patterns from literature

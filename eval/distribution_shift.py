@@ -10,11 +10,11 @@ from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 import torch
 
-from ..predictors.binding import BindingPredictor
-from ..predictors.toxicity import ToxicityPredictor
-from ..predictors.halflife import HalfLifePredictor
-from ..lapep.potential import compute_potential
-from ..lapep.sampler import sample_peptide
+from predictors.binding import BindingPredictor
+from predictors.toxicity import ToxicityPredictor
+from predictors.halflife import HalfLifePredictor
+from lapep.potential import compute_potential
+from lapep.sampler import sample_peptide
 
 
 def evaluate_language_conditioning_effect(

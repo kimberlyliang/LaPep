@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # LaPep: Soft Language with Hard Predictor Constraints for Peptide Generation
 
 Inital implementation and evaluation code for LaPep, a conservative discrete generative framework that integrates soft natural-language preferences with hard predictor-based constraints.
@@ -106,3 +107,8 @@ Set in `config.json`:
   "text_encoder_name": "Qwen/Qwen3-Embedding-0.6B"
 }
 ```
+=======
+---
+license: cc-by-nd-4.0
+---
+>>>>>>> 9befdfa2dc3d2c559e59f867d8d714b4fea1f65c

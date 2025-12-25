@@ -2,28 +2,6 @@
 
 Inital implementation and evaluation code for LaPep, a conservative discrete generative framework that integrates soft natural-language preferences with hard predictor-based constraints.
 
-## Quick Start
-
-```bash
-# 1. Setup virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# 2. Download models from previous paper
-# Place in pretrained/generators/ and pretrained/predictors/
-
-# 3. Create config
-cp config_template.json config.json
-
-# 4. Train preference network
-python scripts/train_preferences.py --config config.json
-
-# 5. Run experiments
-python scripts/run_eval.py --config config.json --output_dir ./eval_results
-```
-
-See [QUICKSTART.md](QUICKSTART.md) for detailed instructions.
 
 ## Structure
 
@@ -46,36 +24,11 @@ lapep/
 └── pretrained/          # Model checkpoints directory
 ```
 
-## Setup
-
-See [SETUP.md](SETUP.md) for detailed setup instructions.
-
-### Quick Setup
-
-1. **Create virtual environment**:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. **Download pretrained models**:
-   - **Base generator**: Download `peptune-pretrained.ckpt` from [PepTune](https://drive.google.com/file/d/1oXGDpKLNF0KX0ZdOcl1NZj5Czk2lSFUn/view?usp=sharing)
-     - Place in: `pretrained/generators/peptune-pretrained.ckpt`
-   - **Binding predictor**: Download `binding-affinity.pt` from [TR2-D2](https://drive.google.com/file/d/128shlEP_-rYAxPgZRCk_n0HBWVbOYSva/view?usp=sharing)
-     - Place in: `pretrained/predictors/binding-affinity.pt`
-
-3. **Create configuration file**:
-```bash
-cp config_template.json config.json
-```
-   The template already has the correct paths to the `pretrained/` directory and uses Qwen embeddings by default.
-
 ## Running Experiments
 
 ### Training Preference Network
 
-First, train the preference network with Qwen embeddings:
+Train the preference network with Qwen embeddings:
 
 ```bash
 python scripts/train_preferences.py \
@@ -87,11 +40,46 @@ python scripts/train_preferences.py \
 ### Running Experiments
 
 ```bash
-# All experiments
+# all experiments
 python scripts/run_eval.py --config config.json --output_dir ./eval_results
 
-# Specific experiment
+# specific experiment
 python scripts/run_eval.py --config config.json --experiments 4.1
+```
+
+# Potential options: 
+Run specific experiments:
+
+```bash
+# Section 4.1: Language conditioning effect
+python scripts/run_eval.py \
+    --config config.json \
+    --output_dir ./eval_results \
+    --experiments 4.1
+
+# Section 4.2: Path independence
+python scripts/run_eval.py \
+    --config config.json \
+    --output_dir ./eval_results \
+    --experiments 4.2
+
+# Section 4.3: Unlabeled objectives
+python scripts/run_eval.py \
+    --config config.json \
+    --output_dir ./eval_results \
+    --experiments 4.3
+
+# Section 4.4: Ablations
+python scripts/run_eval.py \
+    --config config.json \
+    --output_dir ./eval_results \
+    --experiments 4.4
+
+# Section 4.5: Generality across generators
+python scripts/run_eval.py \
+    --config config.json \
+    --output_dir ./eval_results \
+    --experiments 4.5
 ```
 
 ### Generating Peptides
@@ -103,8 +91,6 @@ python scripts/sample_peptides.py \
     --num_samples 100 \
     --output peptides.txt
 ```
-
-## Text Encoder Options
 
 The code supports multiple text encoders via HuggingFace:
 

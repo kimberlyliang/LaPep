@@ -60,7 +60,10 @@ def load_preference_net(path: str, device: Optional[str] = None) -> PreferenceNe
     if device and device != 'cpu':
         if torch.cuda.is_available():
             model = model.to(device)
+            print(f"Preference network moved to {device}")
         else:
-            print(f"Warning: CUDA not available, keeping model on CPU")
+            print(f"Warning: CUDA not available, keeping preference network on CPU")
+    else:
+        print(f"Preference network on CPU")
     
     return model

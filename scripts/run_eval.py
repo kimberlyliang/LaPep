@@ -353,12 +353,25 @@ def main():
     
     args = parser.parse_args()
     
+    # Auto-detect device if CUDA not available
+    if args.device == 'cuda' and not torch.cuda.is_available():
+        print("Warning: CUDA not available, using CPU instead")
+        actual_device = 'cpu'
+    else:
+        actual_device = args.device
+    
+    print(f"Using device: {actual_device}")
+    if actual_device.startswith('cuda'):
+        print(f"CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+    
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print("Loading models...")
     base_generator, text_encoder, preference_net, predictors, config = load_models(
-        args.config, device=args.device
+        args.config, device=actual_device
     )
     
     experiments_to_run = args.experiments

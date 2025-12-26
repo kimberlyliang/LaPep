@@ -28,7 +28,26 @@ class ScoringFunctions:
             score_weights: weights to scale scores (default: 1)
             target_protein: sequence of target protein binder
         """
-        emb_model = AutoModelForMaskedLM.from_pretrained('aaronfeller/PeptideCLM-23M-all').roformer.to(device).eval()
+        import warnings
+        import os
+        
+        # Get cache directory - ensure it's never None
+        cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+        if cache_dir is None:
+            cache_dir = os.path.expanduser('~/.cache/huggingface')
+            os.makedirs(cache_dir, exist_ok=True)
+            os.environ['HF_HOME'] = cache_dir
+        
+        # Suppress deprecation warnings about GenerationMixin
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=FutureWarning)
+            warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
+            warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
+            warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*')
+            emb_model = AutoModelForMaskedLM.from_pretrained(
+                'aaronfeller/PeptideCLM-23M-all',
+                cache_dir=cache_dir
+            ).roformer.to(device).eval()
         
         # Try to find tokenizer files - check multiple locations
         tokenizer_vocab = None

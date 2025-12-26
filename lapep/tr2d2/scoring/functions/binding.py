@@ -5,6 +5,20 @@ import torch
 import pandas as pd
 import torch.nn as nn
 import esm
+import warnings
+
+# Suppress transformers deprecation warnings globally
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+warnings.filterwarnings('ignore', message='.*GenerationMixin.*', module='transformers')
+warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*', module='transformers')
+warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*', module='transformers')
+
+# Ensure HuggingFace cache directory is set before importing
+if 'HF_HOME' not in os.environ and 'TRANSFORMERS_CACHE' not in os.environ:
+    cache_dir = os.path.expanduser('~/.cache/huggingface')
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ['HF_HOME'] = cache_dir
+
 from transformers import AutoModelForMaskedLM
 
 class ImprovedBindingPredictor(nn.Module):
@@ -122,34 +136,159 @@ class BindingAffinity:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
         
         # peptide embeddings
+        # Get cache directory - ensure it's never None
+        cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+        if cache_dir is None:
+            cache_dir = os.path.expanduser('~/.cache/huggingface')
+            os.makedirs(cache_dir, exist_ok=True)
+            os.environ['HF_HOME'] = cache_dir
+        
         if emb_model is not None: 
             self.pep_model = emb_model.to(self.device).eval()
             full_model = None
         else:
-            full_model = AutoModelForMaskedLM.from_pretrained('aaronfeller/PeptideCLM-23M-all', trust_remote_code=True)
+            # Suppress deprecation warnings about GenerationMixin
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=FutureWarning)
+                warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
+                warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
+                warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*')
+                full_model = AutoModelForMaskedLM.from_pretrained(
+                    'aaronfeller/PeptideCLM-23M-all', 
+                    trust_remote_code=True,
+                    cache_dir=cache_dir
+                )
             self.pep_model = full_model.roformer.to(self.device).eval()
         
         if tokenizer is None:
             from transformers import AutoTokenizer
+            
+            # Set HuggingFace cache environment variables early to ensure transformers uses them
+            if 'HF_HOME' not in os.environ:
+                hf_home = os.path.expanduser('~/.cache/huggingface')
+                os.makedirs(hf_home, exist_ok=True)
+                os.environ['HF_HOME'] = hf_home
+            
+            if 'TRANSFORMERS_CACHE' not in os.environ:
+                transformers_cache = os.path.expanduser('~/.cache/huggingface')
+                os.makedirs(transformers_cache, exist_ok=True)
+                os.environ['TRANSFORMERS_CACHE'] = transformers_cache
+            
+            # Get cache directory - ensure it's never None and is a valid path
+            cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+            cache_dir = os.path.abspath(os.path.expanduser(str(cache_dir)))
+            os.makedirs(cache_dir, exist_ok=True)
+            
             try:
-                if full_model is not None:
-                    if hasattr(full_model, 'tokenizer') and full_model.tokenizer is not None:
-                        self.pep_tokenizer = full_model.tokenizer
-                    elif hasattr(full_model, 'roformer') and hasattr(full_model.roformer, 'tokenizer') and full_model.roformer.tokenizer is not None:
-                        self.pep_tokenizer = full_model.roformer.tokenizer
-                    elif hasattr(full_model, 'config'):
+                # Suppress deprecation warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=FutureWarning)
+                    warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
+                    warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
+                    
+                    if full_model is not None:
+                        # First, try to get tokenizer from the model itself
+                        if hasattr(full_model, 'tokenizer') and full_model.tokenizer is not None:
+                            self.pep_tokenizer = full_model.tokenizer
+                        elif hasattr(full_model, 'roformer') and hasattr(full_model.roformer, 'tokenizer') and full_model.roformer.tokenizer is not None:
+                            self.pep_tokenizer = full_model.roformer.tokenizer
+                        elif hasattr(full_model, 'config'):
+                            # Try to get tokenizer from model's tokenizer_config or use the model's cache
+                            model_name = 'aaronfeller/PeptideCLM-23M-all'
+                            
+                            # Try using huggingface_hub to get the tokenizer files path
+                            try:
+                                from huggingface_hub import snapshot_download
+                                model_cache = snapshot_download(
+                                    repo_id=model_name,
+                                    cache_dir=cache_dir,
+                                    ignore_patterns=["*.safetensors", "*.bin", "*.pt", "*.pth", "*.ckpt"]
+                                )
+                                # Now try loading with the explicit local_files_only=False to force download
+                                self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                    model_cache,
+                                    trust_remote_code=True,
+                                    local_files_only=False
+                                )
+                            except Exception as e1:
+                                # Fallback: try loading directly from hub
+                                try:
+                                    self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                        model_name, 
+                                        trust_remote_code=True,
+                                        local_files_only=False  # Force download
+                                    )
+                                except Exception as e2:
+                                    # Last resort: try with use_fast=False
+                                    try:
+                                        self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                            model_name, 
+                                            trust_remote_code=True,
+                                            use_fast=False,
+                                            local_files_only=False
+                                        )
+                                    except Exception as e3:
+                                        # If all else fails, try to create a dummy tokenizer or skip
+                                        print(f"Warning: Could not load tokenizer. Attempts: {e1}, {e2}, {e3}")
+                                        raise Exception(f"All tokenizer loading attempts failed: {e1}, {e2}, {e3}")
+                        else:
+                            # Try without cache_dir first
+                            try:
+                                self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                    'aaronfeller/PeptideCLM-23M-all', 
+                                    trust_remote_code=True
+                                )
+                            except:
+                                self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                    'aaronfeller/PeptideCLM-23M-all', 
+                                    trust_remote_code=True,
+                                    cache_dir=cache_dir
+                                )
+                    else:
+                        # Try loading directly from hub with force download
                         model_name = 'aaronfeller/PeptideCLM-23M-all'
                         try:
-                            self.pep_tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True, use_fast=False)
-                        except:
-                            self.pep_tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-                    else:
-                        self.pep_tokenizer = AutoTokenizer.from_pretrained('aaronfeller/PeptideCLM-23M-all', trust_remote_code=True)
-                else:
-                    self.pep_tokenizer = AutoTokenizer.from_pretrained('aaronfeller/PeptideCLM-23M-all', trust_remote_code=True)
+                            self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                model_name, 
+                                trust_remote_code=True,
+                                local_files_only=False  # Force download
+                            )
+                        except Exception as e1:
+                            try:
+                                self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                    model_name, 
+                                    trust_remote_code=True,
+                                    cache_dir=cache_dir,
+                                    local_files_only=False
+                                )
+                            except Exception as e2:
+                                try:
+                                    self.pep_tokenizer = AutoTokenizer.from_pretrained(
+                                        model_name, 
+                                        trust_remote_code=True,
+                                        use_fast=False,
+                                        local_files_only=False
+                                    )
+                                except Exception as e3:
+                                    raise Exception(f"All tokenizer loading attempts failed: {e1}, {e2}, {e3}")
             except Exception as e:
-                print(f"Warning: Could not load PeptideCLM tokenizer: {e}")
-                print("Binding predictor will return random scores.")
+                import traceback
+                error_msg = str(e)
+                is_vocab_file_error = "vocab_file" in error_msg.lower() or "NoneType" in error_msg
+                
+                print(f"Warning: Could not load PeptideCLM tokenizer from HuggingFace.")
+                if is_vocab_file_error:
+                    print(f"  Reason: The model repository may be missing tokenizer files (vocab.json, etc.)")
+                    print(f"  This is a known issue with some HuggingFace models.")
+                    print(f"  The binding predictor will work but return random scores instead of real predictions.")
+                else:
+                    print(f"  Error: {error_msg}")
+                    print(f"  Full traceback:\n{traceback.format_exc()}")
+                
+                print(f"  Cache directory: {cache_dir}")
+                print(f"  HF_HOME: {os.environ.get('HF_HOME', 'Not set')}")
+                print(f"  TRANSFORMERS_CACHE: {os.environ.get('TRANSFORMERS_CACHE', 'Not set')}")
+                print("  Binding predictor will return random scores.")
                 self.pep_tokenizer = None
         else:
             self.pep_tokenizer = tokenizer

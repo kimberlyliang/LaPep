@@ -36,6 +36,13 @@ else:
         ImprovedBindingPredictor = None
         BindingAffinity = None
     else:
+        # Suppress warnings before importing
+        import warnings
+        warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+        warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
+        warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
+        warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*')
+        
         from scoring.functions.binding import ImprovedBindingPredictor, BindingAffinity
         from transformers import AutoModelForMaskedLM
         TR2D2_AVAILABLE = True
@@ -118,5 +125,44 @@ class RealBindingPredictor(BindingPredictor):
              device: Optional[str] = None):
         if protein_seq is None:
             "no protein sequence provided"
+        
+        # If no tokenizer provided, try to load the local SMILES_SPE_Tokenizer
+        if tokenizer is None:
+            try:
+                from pathlib import Path
+                lapep_root = Path(__file__).parent.parent.resolve()
+                
+                # Try to find tokenizer files in multiple locations
+                tokenizer_vocab = None
+                tokenizer_splits = None
+                
+                for vocab_path in [
+                    lapep_root / "lapep" / "tr2d2" / "tokenizer" / "new_vocab.txt",
+                    lapep_root / "tr2d2-pep" / "tokenizer" / "new_vocab.txt",
+                    lapep_root.parent / "TR2-D2" / "tr2d2-pep" / "tokenizer" / "new_vocab.txt"
+                ]:
+                    splits_path = vocab_path.parent / "new_splits.txt"
+                    if vocab_path.exists() and splits_path.exists():
+                        tokenizer_vocab = str(vocab_path)
+                        tokenizer_splits = str(splits_path)
+                        break
+                
+                if tokenizer_vocab and tokenizer_splits:
+                    # Import here to avoid circular imports
+                    import sys
+                    tr2d2_path = lapep_root / "lapep" / "tr2d2"
+                    if tr2d2_path.exists():
+                        sys.path.insert(0, str(tr2d2_path))
+                        from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
+                        tokenizer = SMILES_SPE_Tokenizer(tokenizer_vocab, tokenizer_splits)
+                        print(f"[Binding Predictor] Using local SMILES_SPE_Tokenizer from {tokenizer_vocab}")
+                    else:
+                        print(f"[Binding Predictor] Warning: Could not find tr2d2 path to load local tokenizer")
+                else:
+                    print(f"[Binding Predictor] Warning: Could not find local tokenizer files, will try HuggingFace tokenizer")
+            except Exception as e:
+                print(f"[Binding Predictor] Warning: Could not load local tokenizer: {e}")
+                print(f"[Binding Predictor] Will try HuggingFace tokenizer instead")
+        
         return cls(path, protein_seq, tokenizer, base_path, device)
 

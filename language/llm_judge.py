@@ -11,7 +11,7 @@ import openai
 
 
 def create_llm_judge(
-    model_name: str = "gpt-4",
+    model_name: str = "qwen3-0.6b",
     api_key: Optional[str] = None
 ) -> Callable[[str, str, str], int]:
     """
@@ -27,8 +27,6 @@ def create_llm_judge(
         - -1 if peptide_b is preferred
         - 0 if equal/no preference
     """
-    if api_key:
-        openai.api_key = api_key
     
     def judge(peptide_a: str, peptide_b: str, prompt: str) -> int:
         """

@@ -54,7 +54,12 @@ def compute_constraint_penalty(
     constraints: Optional[Dict] = None
 ) -> float:
     """
-    Compute hard constraint penalty Ψ(x) = Σ_k λ_k ψ_k(u_k(x)).
+    Algorithm 1, Line 24: Compute hard constraint penalty Ψ(x) = Σ_k λ_k ψ_k(u_k(x)).
+    
+    This implements the constraint penalty term that enforces hard constraints on predictor values.
+    Each predictor k has:
+    - A penalty function ψ_k that penalizes undesirable values
+    - A weight λ_k that controls the strength of the penalty
     
     Args:
         x: Peptide SMILES string
@@ -92,28 +97,45 @@ def compute_constraint_penalty(
 
 def default_penalty_function(u: float, pred_name: str) -> float:
     """
-    Default penalty function based on predictor type.
+    Default penalty function ψ_k(u_k) for Algorithm 1, Line 24.
     
-    For toxicity: penalize high values (u > threshold)
-    For binding: penalize low values (u < threshold)
-    For half-life: penalize deviations from target range
+    These are reasonable defaults based on typical therapeutic peptide requirements:
+    - Toxicity: Should be low (penalize u > 0.3, normalized scale)
+    - Binding: Should be high (penalize u < 0.7, normalized scale)  
+    - Half-life: Should be in optimal range (penalize deviations from [0.5, 0.8])
+    
+    The penalty uses squared distance from threshold/target, which provides:
+    - Smooth gradients for optimization
+    - Stronger penalty for larger violations
+    
+    You can override these by providing custom penalty functions in the constraints dict.
+    
+    Args:
+        u: Normalized predictor value u_k(x) = F_k(f_k(x)) in [0, 1]
+        pred_name: Name of the predictor (used to determine penalty type)
+        
+    Returns:
+        Penalty value (nonnegative, 0 if constraint satisfied)
     """
     if 'toxicity' in pred_name.lower():
-        # Penalize toxicity > 0.3
+        # Penalize toxicity > 0.3 (normalized scale)
+        # Threshold chosen to allow some toxicity but penalize high values
         threshold = 0.3
         if u > threshold:
             return (u - threshold) ** 2
         return 0.0
     
     elif 'binding' in pred_name.lower():
-        # Penalize binding < 0.7
+        # Penalize binding < 0.7 (normalized scale)
+        # Threshold chosen to require reasonably strong binding
         threshold = 0.7
         if u < threshold:
             return (threshold - u) ** 2
         return 0.0
     
     elif 'halflife' in pred_name.lower() or 'half_life' in pred_name.lower():
-        # Target range: [0.5, 0.8]
+        # Target range: [0.5, 0.8] (normalized scale)
+        # Penalize deviations from this optimal range
         target_min, target_max = 0.5, 0.8
         if u < target_min:
             return (target_min - u) ** 2
@@ -122,6 +144,7 @@ def default_penalty_function(u: float, pred_name: str) -> float:
         return 0.0
     
     else:
+        # Unknown predictor type: no penalty
         return 0.0
 
 
@@ -134,18 +157,28 @@ def compute_preference_score(
     use_linear_preferences: bool = False
 ) -> float:
     """
-    Compute language preference score R(x;t) = G_η(t)(u(x)).
+    Algorithm 1, Line 23: Compute prompt-dependent preference score R(x;t) = G_η(t)(u(x)).
+    
+    This implements the soft language preference term that depends on the prompt t.
+    The preference functional G_η is parameterized by η = g_ψ*(e) where:
+    - e = E_text(t) is the text embedding
+    - g_ψ* is the trained preference network
+    - u(x) = [u_1(x), ..., u_K(x)] are normalized predictor coordinates
+    
+    Two modes:
+    - Linear: R(x;t) = η^T u (simple dot product)
+    - Nonlinear: R(x;t) = G_η(u) (quadratic or learned function)
     
     Args:
         x: Peptide SMILES string
-        prompt: Natural language prompt
+        prompt: Natural language prompt t
         predictors: Dict of predictor objects
-        text_encoder: Frozen text encoder
-        preference_net: Trained preference network
-        use_linear_preferences: If True, use linear functional instead of nonlinear
+        text_encoder: Frozen text encoder E_text
+        preference_net: Trained preference network g_ψ*
+        use_linear_preferences: If True, use linear functional η^T u instead of nonlinear
         
     Returns:
-        Preference score (higher is better)
+        Preference score R(x;t) (higher is better for the prompt)
     """
     prompt_embedding = text_encoder.encode(prompt)
     if isinstance(prompt_embedding, torch.Tensor):

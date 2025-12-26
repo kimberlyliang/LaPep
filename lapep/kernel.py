@@ -1,10 +1,3 @@
-"""
-LaPep Transition Kernel: Eq (10)
-
-This module implements the conservative transition kernel that modifies base generator
-dynamics through the scalar potential.
-"""
-
 import numpy as np
 import torch
 from typing import Optional, Dict, List

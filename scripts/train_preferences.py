@@ -186,7 +186,8 @@ def compute_pairwise_ranking_loss(
     u_b: torch.Tensor,
     prompt_embedding: torch.Tensor,
     y_ab: torch.Tensor,
-    use_linear: bool = False
+    use_linear: bool = False,
+    eta: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """
     Compute pairwise ranking loss.
@@ -203,12 +204,14 @@ def compute_pairwise_ranking_loss(
         prompt_embedding: Text embeddings from frozen encoder, shape (batch_size, embedding_dim)
         y_ab: Preference labels, shape (batch_size,) with values in {0, 1}
         use_linear: If True, use linear preference functional R(x;t) = η^T u
+        eta: Optional pre-computed preference parameters η(i) = g_ψ(e(i))
     
     Returns:
         Scalar loss value
     """
-    # Pass embedding through MLP to get preference parameters
-    eta = preference_net(prompt_embedding)  # (batch_size, output_dim)
+    # Pass embedding through MLP to get preference parameters η(i) = g_ψ(e(i))
+    if eta is None:
+        eta = preference_net(prompt_embedding)  # (batch_size, output_dim)
     
     # Compute preference scores R(x;t) = G_η(t)(u(x))
     if use_linear:
@@ -232,7 +235,8 @@ def compute_pairwise_ranking_loss(
     # Compute score difference
     diff = R_a - R_b  # (batch_size,)
     
-    # Pairwise ranking loss
+    # Algorithm Line 28: Compute pairwise preference loss
+    # L_pref = -y_ab log σ(R(x_a;t) – R(x_b;t)) – (1-y_ab) log σ(R(x_b;t) – R(x_a;t))
     # y_ab = 1 means x_a is preferred, so we want R_a > R_b
     # y_ab = 0 means x_b is preferred, so we want R_b > R_a
     loss = -y_ab * torch.log(torch.sigmoid(diff) + 1e-8) - \
@@ -653,9 +657,13 @@ def train_preference_network(
             "stats": epoch_predictor_stats
         })
         
-        # Create pairwise comparisons for each prompt
+        # Algorithm Line 9: Sample prompts {t(i)}^B_{i=1} from T (prompt distribution)
+        # The prompt distribution T is the list of prompts provided in config.
+        # We sample uniformly from this list by cycling through all prompts each epoch.
+        # For each prompt, we create pairwise comparisons using the weak supervision source W.
         all_comparisons = []
         for prompt_idx, prompt in enumerate(prompts):
+            # Assign peptides to this prompt (uniform distribution over prompts)
             prompt_peptides = peptides[prompt_idx * peptides_per_batch:(prompt_idx + 1) * peptides_per_batch]
             prompt_scores = predictor_scores[prompt_idx * peptides_per_batch:(prompt_idx + 1) * peptides_per_batch]
             
@@ -693,6 +701,7 @@ def train_preference_network(
             batch_peptides_b = [comp[2] for comp in batch_comparisons]
             batch_labels = torch.tensor([comp[3] for comp in batch_comparisons], dtype=torch.float32).to(device)
             
+            # Algorithm Lines 15-17: Compute normalized predictor coordinates u_k(x_j) = F_k(f_k(x_j))
             # Get predictor scores for batch peptides
             batch_scores_a = []
             batch_scores_b = []
@@ -700,17 +709,19 @@ def train_preference_network(
                 scores_a = []
                 scores_b = []
                 for pred_name, predictor in predictors.items():
+                    # u_k(x) = F_k(f_k(x)) - normalized predictor coordinates
                     scores_a.append(predictor.normalize(predictor.predict(x_a)))
                     scores_b.append(predictor.normalize(predictor.predict(x_b)))
                 batch_scores_a.append(scores_a)
                 batch_scores_b.append(scores_b)
             
-            u_a = torch.tensor(batch_scores_a, dtype=torch.float32).to(device)
-            u_b = torch.tensor(batch_scores_b, dtype=torch.float32).to(device)
+            u_a = torch.tensor(batch_scores_a, dtype=torch.float32).to(device)  # u(x_a)
+            u_b = torch.tensor(batch_scores_b, dtype=torch.float32).to(device)  # u(x_b)
             
+            # Algorithm Line 10: Compute text embeddings e(i) ← E_text(t(i))
             # Feed prompts through frozen text encoder
             with torch.no_grad():
-                prompt_embeddings = text_encoder.encode(batch_prompts)
+                prompt_embeddings = text_encoder.encode(batch_prompts)  # e(i) = E_text(t(i))
                 if len(prompt_embeddings.shape) == 1:
                     prompt_embeddings = prompt_embeddings.unsqueeze(0)
                 # Ensure embeddings are on the correct device
@@ -720,6 +731,10 @@ def train_preference_network(
             optimizer.zero_grad()
             
             try:
+                # Get preference parameters η(i) = g_ψ(e(i)) as per algorithm Line 11
+                eta = preference_net(prompt_embeddings)  # (batch_size, output_dim)
+                
+                # Compute pairwise preference loss L_pref as per algorithm Line 28
                 loss = compute_pairwise_ranking_loss(
                     preference_net,
                     text_encoder,
@@ -727,13 +742,17 @@ def train_preference_network(
                     u_b,
                     prompt_embeddings,
                     batch_labels,
-                    use_linear
+                    use_linear,
+                    eta=eta  # Pass pre-computed eta to avoid recomputation
                 )
                 
-                # Add regularization
+                # Add regularization L_reg(ψ) on preference parameters η(i) as per algorithm Line 30
+                # Regularize to avoid extreme utilities (e.g., l2 on η(i))
                 if reg_weight > 0:
-                    l2_reg = sum(p.pow(2.0).sum() for p in preference_net.parameters())
+                    l2_reg = torch.mean(eta.pow(2.0).sum(dim=-1))
                     loss = loss + reg_weight * l2_reg
+                
+                # Update ψ ← ψ – α∇ψ (L_pref + λ_reg L_reg) as per algorithm Line 31
                 
                 # Backward pass
                 loss.backward()
@@ -1032,12 +1051,20 @@ def main():
     base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
     print(f"[Base Generator] Loaded successfully")
     
-    # Get prompts from config or use defaults
+    # Algorithm Line 1: prompt distribution T
+    # The prompt distribution T is a list of natural language prompts.
+    # During training (Algorithm Line 9), prompts are sampled from this distribution.
+    # You can define your own prompts in the config file under "training_prompts",
+    # or use the defaults below. Each prompt should describe desired peptide properties.
     prompts = config.get('training_prompts', [
         "Generate a peptide with high binding affinity and low toxicity",
         "Generate a stable peptide with long half-life",
         "Generate a balanced peptide optimizing binding, toxicity, and half-life"
     ])
+    
+    print(f"\n[Prompt Distribution T] Using {len(prompts)} training prompt(s):")
+    for i, prompt in enumerate(prompts, 1):
+        print(f"  {i}. {prompt}")
     
     # Initialize preference network (only trainable component)
     # Get embedding dimension from text encoder

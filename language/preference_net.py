@@ -4,8 +4,26 @@ from typing import Optional
 
 
 class PreferenceNet(nn.Module):
+    """
+    Preference Network g_ψ: Maps text embeddings to preference parameters η.
     
-    def __init__(self, input_dim: int = 768, hidden_dim: int = 256,
+    Architecture: MLP with 2 hidden layers
+    - Input: Text embeddings e (from frozen E_text)
+    - Output: Preference parameters η (used in preference functional G_η)
+    
+    Dimension choices:
+    - input_dim: Determined by text encoder (1024 for Qwen3-0.6B, 768 for BERT-like models)
+    - hidden_dim: 256 - Standard size for MLPs, balances capacity vs. overfitting
+    - output_dim: 64 - Should be >= num_predictors for linear mode, can be larger for nonlinear
+    - num_predictors: Number of predictor functions (typically 3: binding, toxicity, halflife)
+    
+    These are reasonable defaults but can be tuned based on:
+    - Task complexity (more complex prompts may need larger hidden_dim)
+    - Number of predictors (output_dim should accommodate predictor space)
+    - Available compute (larger networks train slower)
+    """
+    
+    def __init__(self, input_dim: int = 1024, hidden_dim: int = 256,
                  output_dim: int = 64, num_predictors: int = 3):
         super().__init__()
         self.input_dim = input_dim
@@ -37,11 +55,10 @@ class PreferenceNet(nn.Module):
 
 
 def load_preference_net(path: str, device: Optional[str] = None) -> PreferenceNet:
-    # Load to CPU first, then move to device (safer for large models)
-    load_device = 'cpu'
+    load_device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
     checkpoint = torch.load(path, map_location=load_device)
     model = PreferenceNet(
-        input_dim=checkpoint.get('input_dim', 768),
+        input_dim=checkpoint.get('input_dim', 1024),
         hidden_dim=checkpoint.get('hidden_dim', 256),
         output_dim=checkpoint.get('output_dim', 64),
         num_predictors=checkpoint.get('num_predictors', 3)

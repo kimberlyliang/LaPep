@@ -128,11 +128,16 @@ def create_pairwise_comparisons_rule_based(
                 score_b += weight * u_b[idx]
             
             # Determine preference
-            if score_a > score_b:
-                comparisons.append((x_a, x_b, 1))  # a preferred to b
-            elif score_b > score_a:
-                comparisons.append((x_b, x_a, 1))  # b preferred to a
-            # If equal, skip (or could randomly assign)
+            if abs(score_a - score_b) < 1e-6:
+                # Scores are equal - randomly assign to ensure comparisons are generated
+                if np.random.random() > 0.5:
+                    comparisons.append((x_a, x_b, 1))
+                else:
+                    comparisons.append((x_b, x_a, 1))
+            elif score_a > score_b:
+                comparisons.append((x_a, x_b, 1))
+            else:
+                comparisons.append((x_b, x_a, 1))
     
     return comparisons
 

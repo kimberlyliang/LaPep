@@ -31,8 +31,33 @@ class ScoringFunctions:
         import warnings
         import os
         
-        # Get cache directory - ensure it's never None
-        cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+        # Get cache directory - ensure it's never None and use scratch if available
+        cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE') or os.environ.get('HF_HUB_CACHE')
+        
+        # If no cache dir set and we're on a system with /scratch, use it
+        if cache_dir is None:
+            if os.path.exists('/scratch'):
+                import getpass
+                username = getpass.getuser()
+                possible_dirs = [
+                    f'/scratch/pranamlab/{username}/.cache/huggingface',
+                    f'/scratch/{username}/.cache/huggingface',
+                    os.path.join(os.getcwd(), '.cache', 'huggingface'),
+                ]
+                for possible_dir in possible_dirs:
+                    try:
+                        os.makedirs(possible_dir, exist_ok=True)
+                        test_file = os.path.join(possible_dir, '.test_write')
+                        with open(test_file, 'w') as f:
+                            f.write('test')
+                        os.remove(test_file)
+                        cache_dir = possible_dir
+                        os.environ['HF_HOME'] = cache_dir
+                        os.environ['TRANSFORMERS_CACHE'] = cache_dir
+                        break
+                    except (OSError, PermissionError):
+                        continue
+        
         if cache_dir is None:
             cache_dir = os.path.expanduser('~/.cache/huggingface')
             os.makedirs(cache_dir, exist_ok=True)
@@ -44,10 +69,23 @@ class ScoringFunctions:
             warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
             warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
             warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*')
-            emb_model = AutoModelForMaskedLM.from_pretrained(
-                'aaronfeller/PeptideCLM-23M-all',
-                cache_dir=cache_dir
-            ).roformer.to(device).eval()
+            
+            # Try to use safetensors to avoid torch.load security issue
+            try:
+                emb_model = AutoModelForMaskedLM.from_pretrained(
+                    'aaronfeller/PeptideCLM-23M-all',
+                    cache_dir=cache_dir,
+                    use_safetensors=True  # Prefer safetensors format
+                ).roformer.to(device).eval()
+            except Exception as e:
+                # Fallback: try without safetensors (may fail if torch < 2.6)
+                print(f"Warning: Could not load with safetensors: {e}")
+                print("Attempting to load without safetensors (may require torch >= 2.6)...")
+                emb_model = AutoModelForMaskedLM.from_pretrained(
+                    'aaronfeller/PeptideCLM-23M-all',
+                    cache_dir=cache_dir,
+                    use_safetensors=False
+                ).roformer.to(device).eval()
         
         # Try to find tokenizer files - check multiple locations
         tokenizer_vocab = None

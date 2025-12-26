@@ -56,11 +56,45 @@ class TextEncoder:
         return torch.stack(all_embeddings)
     
     def _load_model(self, model_name: str):
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # Set up cache directory to avoid disk quota issues
+        cache_dir = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE') or os.environ.get('HF_HUB_CACHE')
+        
+        # If no cache dir set and we're on a system with /scratch, use it
+        if cache_dir is None:
+            if os.path.exists('/scratch'):
+                # Try to find a writable scratch directory
+                import getpass
+                username = getpass.getuser()
+                
+                # Try multiple possible scratch locations
+                possible_dirs = [
+                    f'/scratch/pranamlab/{username}/.cache/huggingface',  # Lab-specific
+                    f'/scratch/{username}/.cache/huggingface',  # User-specific
+                    os.path.join(os.getcwd(), '.cache', 'huggingface'),  # Current directory
+                ]
+                
+                for possible_dir in possible_dirs:
+                    try:
+                        os.makedirs(possible_dir, exist_ok=True)
+                        # Test if we can write
+                        test_file = os.path.join(possible_dir, '.test_write')
+                        with open(test_file, 'w') as f:
+                            f.write('test')
+                        os.remove(test_file)
+                        cache_dir = possible_dir
+                        os.environ['HF_HOME'] = cache_dir
+                        os.environ['TRANSFORMERS_CACHE'] = cache_dir
+                        print(f"[Text Encoder] Using cache directory: {cache_dir}")
+                        break
+                    except (OSError, PermissionError):
+                        continue
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype="auto",
-            device_map="auto"
+            device_map="auto",
+            cache_dir=cache_dir
         )
         return model, tokenizer
     

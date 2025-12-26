@@ -1,7 +1,37 @@
 import sys
-import os, torch
-import numpy as np
+import os
+
+# Set torch hub cache directory to scratch BEFORE importing torch/esm to avoid disk quota issues
+if 'TORCH_HOME' not in os.environ:
+    if os.path.exists('/scratch'):
+        import getpass
+        username = getpass.getuser()
+        possible_dirs = [
+            f'/scratch/pranamlab/{username}/.cache/torch',
+            f'/scratch/{username}/.cache/torch',
+            os.path.join(os.getcwd(), '.cache', 'torch'),
+        ]
+        for possible_dir in possible_dirs:
+            try:
+                os.makedirs(possible_dir, exist_ok=True)
+                test_file = os.path.join(possible_dir, '.test_write')
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+                os.environ['TORCH_HOME'] = possible_dir
+                print(f"[Binding Predictor] Using torch cache directory: {possible_dir}")
+                break
+            except (OSError, PermissionError):
+                continue
+
+# Ensure HuggingFace cache directory is set before importing
+if 'HF_HOME' not in os.environ and 'TRANSFORMERS_CACHE' not in os.environ:
+    cache_dir = os.path.expanduser('~/.cache/huggingface')
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ['HF_HOME'] = cache_dir
+
 import torch
+import numpy as np
 import pandas as pd
 import torch.nn as nn
 import esm
@@ -12,12 +42,6 @@ warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 warnings.filterwarnings('ignore', message='.*GenerationMixin.*', module='transformers')
 warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*', module='transformers')
 warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*', module='transformers')
-
-# Ensure HuggingFace cache directory is set before importing
-if 'HF_HOME' not in os.environ and 'TRANSFORMERS_CACHE' not in os.environ:
-    cache_dir = os.path.expanduser('~/.cache/huggingface')
-    os.makedirs(cache_dir, exist_ok=True)
-    os.environ['HF_HOME'] = cache_dir
 
 from transformers import AutoModelForMaskedLM
 

@@ -6,10 +6,8 @@ import warnings
 import numpy as np
 from pathlib import Path
 from typing import Optional
-from scoring.functions.binding import ImprovedBindingPredictor, BindingAffinity
 from transformers import AutoModelForMaskedLM
 from .binding import BindingPredictor
-from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
 
 
 lapep_root = Path(__file__).parent.parent.resolve()
@@ -24,6 +22,7 @@ for path in tr2d2_paths:
         sys.path.insert(0, str(tr2d2_path))
         break
 
+# Import scoring modules only after path is set up
 if tr2d2_path is None:
     TR2D2_AVAILABLE = False
     ImprovedBindingPredictor = None
@@ -36,6 +35,15 @@ else:
         BindingAffinity = None
     else:
         TR2D2_AVAILABLE = True
+        try:
+            from scoring.functions.binding import ImprovedBindingPredictor, BindingAffinity
+            from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
+        except ImportError as e:
+            TR2D2_AVAILABLE = False
+            ImprovedBindingPredictor = None
+            BindingAffinity = None
+            SMILES_SPE_Tokenizer = None
+            print(f"[Binding Wrapper] Warning: Could not import TR2D2 modules: {e}")
 
 class RealBindingPredictor(BindingPredictor):
     
@@ -140,8 +148,16 @@ class RealBindingPredictor(BindingPredictor):
                     tr2d2_path = lapep_root / "lapep" / "tr2d2"
                     if tr2d2_path.exists():
                         sys.path.insert(0, str(tr2d2_path))
-                        tokenizer = SMILES_SPE_Tokenizer(tokenizer_vocab, tokenizer_splits)
-                        print(f"[Binding Predictor] Using local SMILES_SPE_Tokenizer from {tokenizer_vocab}")
+                        try:
+                            if SMILES_SPE_Tokenizer is not None:
+                                tokenizer = SMILES_SPE_Tokenizer(tokenizer_vocab, tokenizer_splits)
+                                print(f"[Binding Predictor] Using local SMILES_SPE_Tokenizer from {tokenizer_vocab}")
+                            else:
+                                from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer as LocalTokenizer
+                                tokenizer = LocalTokenizer(tokenizer_vocab, tokenizer_splits)
+                                print(f"[Binding Predictor] Using local SMILES_SPE_Tokenizer from {tokenizer_vocab}")
+                        except ImportError as e:
+                            print(f"[Binding Predictor] Warning: Could not import SMILES_SPE_Tokenizer: {e}")
                     else:
                         print(f"[Binding Predictor] Warning: Could not find tr2d2 path to load local tokenizer")
                 else:

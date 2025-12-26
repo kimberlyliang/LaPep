@@ -15,8 +15,26 @@ import os
 from pathlib import Path
 import torch
 import sys
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def convert_to_serializable(obj):
+    """Recursively convert numpy arrays and other non-serializable types to JSON-compatible types."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_serializable(item) for item in obj]
+    else:
+        return obj
+
 
 from eval.distribution_shift import (
     evaluate_language_conditioning_effect,
@@ -36,7 +54,52 @@ from eval.ablations import (
 )
 
 
-def load_models(config_path: str, device: str = 'cuda'):
+def find_latest_trained_model(results_dir: Path = Path("results")) -> Path:
+    """
+    Find the latest trained model in the results directory.
+    
+    Looks for final_model.ckpt files in training_* subdirectories,
+    returns the most recently modified one.
+    
+    Args:
+        results_dir: Base results directory (default: "results")
+        
+    Returns:
+        Path to the latest model checkpoint
+        
+    Raises:
+        FileNotFoundError: If no trained models are found
+    """
+    from datetime import datetime
+    results_dir = Path(results_dir)
+    if not results_dir.exists():
+        raise FileNotFoundError(f"Results directory not found: {results_dir}")
+    
+    # Find all final_model.ckpt files in training_* directories
+    model_files = []
+    for training_dir in results_dir.glob("training_*"):
+        model_file = training_dir / "final_model.ckpt"
+        if model_file.exists():
+            model_files.append(model_file)
+    
+    if not model_files:
+        raise FileNotFoundError(
+            f"No trained models found in {results_dir}. "
+            f"Please train a model first or check the results directory."
+        )
+    
+    # Return the most recently modified one
+    latest_model = max(model_files, key=lambda p: p.stat().st_mtime)
+    mod_time = datetime.fromtimestamp(latest_model.stat().st_mtime)
+    print(f"\n[Model Selection] Found latest trained model:")
+    print(f"  Path: {latest_model}")
+    print(f"  Training directory: {latest_model.parent}")
+    print(f"  Last modified: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    return latest_model
+
+
+def load_models(config_path: str, device: str = 'cuda', use_latest_model: bool = True):
     """Load all required models from config."""
     with open(config_path, 'r') as f:
         config = json.load(f)
@@ -52,8 +115,25 @@ def load_models(config_path: str, device: str = 'cuda'):
     actual_embedding_dim = test_embedding.shape[-1]
     print(f"[Model Check] Text encoder embedding dimension: {actual_embedding_dim}")
     
+    # Use latest trained model if requested, otherwise use config
+    if use_latest_model:
+        try:
+            latest_model_path = find_latest_trained_model()
+            preference_net_path = str(latest_model_path)
+        except FileNotFoundError as e:
+            print(f"\n[Model Selection] Warning: {e}")
+            print(f"[Model Selection] Falling back to config path: {config.get('preference_net_path', 'Not specified')}")
+            preference_net_path = config.get('preference_net_path')
+            if preference_net_path is None:
+                raise ValueError("No preference_net_path in config and no trained models found in results/")
+    else:
+        preference_net_path = config.get('preference_net_path')
+        if preference_net_path is None:
+            raise ValueError("preference_net_path not specified in config")
+        print(f"\n[Model Selection] Using model from config: {preference_net_path}")
+    
     from language.preference_net import load_preference_net
-    preference_net = load_preference_net(config['preference_net_path'], device=device)
+    preference_net = load_preference_net(preference_net_path, device=device)
     
     # Check if dimensions match
     if preference_net.input_dim != actual_embedding_dim:
@@ -118,8 +198,7 @@ def run_experiment_4_1(
     
     results_path = output_dir / "experiment_4_1_results.json"
     with open(results_path, 'w') as f:
-        json.dump({k: v.tolist() if isinstance(v, np.ndarray) else v 
-                  for k, v in results.items()}, f, indent=2)
+        json.dump(convert_to_serializable(results), f, indent=2)
     
     predictor_names = list(predictors.keys())
     table = format_distribution_table(results, predictor_names)
@@ -157,7 +236,7 @@ def run_experiment_4_2(
     
     results_path = output_dir / "experiment_4_2_results.json"
     with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(convert_to_serializable(results), f, indent=2)
     
     table = format_circulation_table(results)
     table_path = output_dir / "table_path_independence.tex"
@@ -203,7 +282,7 @@ def run_experiment_4_3(
     
     results_path = output_dir / "experiment_4_3_results.json"
     with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(convert_to_serializable(results), f, indent=2)
     
     table = format_unlabeled_table(results)
     table_path = output_dir / "table_unlabeled_control.tex"
@@ -240,7 +319,7 @@ def run_experiment_4_4(
     
     results_path = output_dir / "experiment_4_4_results.json"
     with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(convert_to_serializable(results), f, indent=2)
     
     table = format_ablation_table(results)
     table_path = output_dir / "table_ablations.tex"
@@ -301,7 +380,7 @@ def run_experiment_4_5(
     
     results_path = output_dir / "experiment_4_5_results.json"
     with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(convert_to_serializable(results), f, indent=2)
     
     lines = [
         "\\begin{table}[ht]",
@@ -370,6 +449,11 @@ def main():
         default='cuda' if torch.cuda.is_available() else 'cpu',
         help='Device to run experiments on'
     )
+    parser.add_argument(
+        '--use_config_model',
+        action='store_true',
+        help='Use model from config instead of latest trained model'
+    )
     
     args = parser.parse_args()
     
@@ -391,7 +475,7 @@ def main():
     
     print("Loading models...")
     base_generator, text_encoder, preference_net, predictors, config = load_models(
-        args.config, device=actual_device
+        args.config, device=actual_device, use_latest_model=not args.use_config_model
     )
     
     experiments_to_run = args.experiments

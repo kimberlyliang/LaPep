@@ -25,7 +25,19 @@ class HalfLifePredictor:
     
     @classmethod
     def load(cls, path: str):
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-        return cls(model=data.get('model'), reference_cdf=data.get('cdf'))
+        from pathlib import Path
+        model_path = Path(path)
+        if not model_path.exists():
+            print(f"Warning: Half-life predictor file not found: {path}")
+            print("Half-life predictor will return random scores.")
+            return cls(model=None, reference_cdf=None)
+        
+        try:
+            with open(path, 'rb') as f:
+                data = pickle.load(f)
+            return cls(model=data.get('model'), reference_cdf=data.get('cdf'))
+        except Exception as e:
+            print(f"Warning: Could not load half-life predictor from {path}: {e}")
+            print("Half-life predictor will return random scores.")
+            return cls(model=None, reference_cdf=None)
 

@@ -1,9 +1,3 @@
-"""
-Sampling Script for LaPep
-
-Generate peptides with language conditioning.
-"""
-
 import argparse
 import json
 from pathlib import Path

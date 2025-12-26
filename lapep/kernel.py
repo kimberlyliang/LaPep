@@ -15,13 +15,12 @@ def compute_transition_kernel(
     prompt: Optional[str],
     tau: int,
     constraints: Optional[Dict] = None,
-    use_linear_preferences: bool = False
+    use_linear_preferences: bool = False,
+    eta: Optional[any] = None
 ) -> np.ndarray:
     """
     Compute the LaPep transition kernel q_θ(x'|x,t,τ) from Eq (10).
-    
     q_θ(x'|x,t,τ) = b_θ(x'|x,τ) * exp(0.5[U(x;t) - U(x';t)]) / Z(x)
-    
     Args:
         x: Current state
         candidates: List of candidate next states (including x itself)
@@ -33,14 +32,17 @@ def compute_transition_kernel(
         tau: Time step index
         constraints: Optional constraint configuration
         use_linear_preferences: Whether to use linear preference functional
+        eta: Pre-computed preference parameters (should be computed once by caller for performance)
         
     Returns:
         Array of probabilities for each candidate (normalized)
     """
+    # Note: eta should be pre-computed by the caller to avoid redundant encoding
+    
     # potential at current state
     U_x = compute_potential(
         x, prompt, predictors, text_encoder, preference_net,
-        constraints, use_linear_preferences
+        constraints, use_linear_preferences, eta=eta
     )
     
     base_probs = []
@@ -55,7 +57,7 @@ def compute_transition_kernel(
     for candidate in candidates:
         U_candidate = compute_potential(
             candidate, prompt, predictors, text_encoder, preference_net,
-            constraints, use_linear_preferences
+            constraints, use_linear_preferences, eta=eta
         )
         
         # base log probability
@@ -86,7 +88,9 @@ def compute_edge_flow(
     predictors: Dict,
     prompt: Optional[str],
     tau: int,
-    constraints: Optional[Dict] = None
+    constraints: Optional[Dict] = None,
+    use_linear_preferences: bool = False,
+    eta: Optional[any] = None
 ) -> float:
     """
     Compute antisymmetric edge flow F(x,x') = log(q(x'|x) / q(x|x')).
@@ -102,16 +106,26 @@ def compute_edge_flow(
         prompt: Natural language prompt
         tau: Time step
         constraints: Optional constraints
+        use_linear_preferences: Whether to use linear preference functional
+        eta: Pre-computed preference parameters (computed once if not provided)
         
     Returns:
         Edge flow value
     """
+    # Compute eta once for both transition kernel calls
+    if eta is None and prompt is not None and text_encoder is not None and preference_net is not None:
+        e = text_encoder.encode(prompt)
+        if isinstance(e, torch.Tensor):
+            if len(e.shape) == 1:
+                e = e.unsqueeze(0)
+        eta = preference_net(e)
+    
     # compute transition probabilities in both directions
     candidates_forward = [x_prime, x] 
     probs_forward = compute_transition_kernel(
         x, candidates_forward, base_generator,
         text_encoder, preference_net, predictors,
-        prompt, tau, constraints
+        prompt, tau, constraints, use_linear_preferences, eta=eta
     )
     q_forward = probs_forward[0]  # probability of x -> x'
     
@@ -119,7 +133,7 @@ def compute_edge_flow(
     probs_backward = compute_transition_kernel(
         x_prime, candidates_backward, base_generator,
         text_encoder, preference_net, predictors,
-        prompt, tau, constraints
+        prompt, tau, constraints, use_linear_preferences, eta=eta
     )
     q_backward = probs_backward[0]  # probability of x' -> x
     

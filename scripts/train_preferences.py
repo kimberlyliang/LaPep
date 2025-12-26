@@ -1,4 +1,4 @@
-"""training script for LaPep preference network."""
+"training script for LaPep preference network"
 
 import argparse
 import torch
@@ -42,16 +42,26 @@ def sample_peptide_batch(
         np.random.seed(seed)
         torch.manual_seed(seed)
     
-    print(f"  Sampling {batch_size} peptides...")
+    print(f"Sampling {batch_size} peptides...")
     peptides = base_generator.sample_unconditioned(num_samples=batch_size)
     
+    # If we got fewer peptides than requested, try sampling more
     if len(peptides) < batch_size:
-        while len(peptides) < batch_size:
-            peptides.append("[MASK]" * 10)
+        print(f"  Warning: Only got {len(peptides)} peptides, sampling additional ones...")
+        max_retries = 10
+        retry_count = 0
+        while len(peptides) < batch_size and retry_count < max_retries:
+            additional = base_generator.sample_unconditioned(num_samples=batch_size - len(peptides))
+            peptides.extend(additional)
+            retry_count += 1
+        
+        # If still not enough, truncate to what we have (better than invalid placeholders)
+        if len(peptides) < batch_size:
+            print(f"  Warning: Could only sample {len(peptides)} peptides (requested {batch_size})")
     elif len(peptides) > batch_size:
         peptides = peptides[:batch_size]
     
-    print(f"  Successfully sampled {len(peptides)} peptides")
+    print(f"Successfully sampled {len(peptides)} peptides")
     return peptides
 
 
@@ -70,7 +80,6 @@ def score_peptides_with_predictors(
             normalized = predictor.normalize(raw_value)
             peptide_scores.append(normalized)
         scores.append(peptide_scores)
-    
     return np.array(scores, dtype=np.float32)
 
 
@@ -94,10 +103,8 @@ def create_pairwise_comparisons_rule_based(
     """
     comparisons = []
     pred_names = list(predictors.keys())
-    
     # Simple rule-based preferences based on prompt keywords
     prompt_lower = prompt.lower()
-    
     # Determine which predictors to prioritize based on prompt
     weights = {}
     if 'binding' in prompt_lower or 'affinity' in prompt_lower:
@@ -161,11 +168,10 @@ def create_pairwise_comparisons_llm_judge(
         List of (peptide_a, peptide_b, y_ab) tuples
     """
     if llm_judge is None:
-        # Fallback to rule-based if no LLM judge provided
         return []
     
     comparisons = []
-    
+
     # Create all pairs
     for i in range(len(peptides)):
         for j in range(i + 1, len(peptides)):
@@ -203,7 +209,7 @@ def compute_pairwise_ranking_loss(
     
     Args:
         preference_net: MLP g_ψ that maps text embeddings to preference parameters
-        text_encoder: Frozen text encoder (already applied, embedding provided)
+        text_encoder: Frozen text encoder
         u_a: Predictor coordinates for peptide a, shape (batch_size, num_predictors)
         u_b: Predictor coordinates for peptide b, shape (batch_size, num_predictors)
         prompt_embedding: Text embeddings from frozen encoder, shape (batch_size, embedding_dim)
@@ -221,7 +227,6 @@ def compute_pairwise_ranking_loss(
     # Compute preference scores R(x;t) = G_η(t)(u(x))
     if use_linear:
         # Linear: R(x;t) = η^T u
-        # Ensure dimensions match
         if eta.shape[-1] == u_a.shape[-1]:
             R_a = torch.sum(eta * u_a, dim=-1)  # (batch_size,)
             R_b = torch.sum(eta * u_b, dim=-1)  # (batch_size,)
@@ -231,9 +236,7 @@ def compute_pairwise_ranking_loss(
             R_a = torch.sum(eta[:, :min_dim] * u_a[:, :min_dim], dim=-1)
             R_b = torch.sum(eta[:, :min_dim] * u_b[:, :min_dim], dim=-1)
     else:
-        # Nonlinear preference functional
-        # For now, use a simple MLP-like transformation
-        # In practice, this could be a learned neural network over u
+        # In practice, this could be a learned neural network over u but using simple MLP-like transformation for now
         R_a = apply_nonlinear_preference(u_a, eta)
         R_b = apply_nonlinear_preference(u_b, eta)
     
@@ -242,11 +245,8 @@ def compute_pairwise_ranking_loss(
     
     # Algorithm Line 28: Compute pairwise preference loss
     # L_pref = -y_ab log σ(R(x_a;t) – R(x_b;t)) – (1-y_ab) log σ(R(x_b;t) – R(x_a;t))
-    # y_ab = 1 means x_a is preferred, so we want R_a > R_b
-    # y_ab = 0 means x_b is preferred, so we want R_b > R_a
     loss = -y_ab * torch.log(torch.sigmoid(diff) + 1e-8) - \
            (1 - y_ab) * torch.log(torch.sigmoid(-diff) + 1e-8)
-    
     return loss.mean()
 
 
@@ -255,11 +255,8 @@ def apply_nonlinear_preference(
     eta: torch.Tensor
 ) -> torch.Tensor:
     """
-    Apply nonlinear preference functional G_η(u).
-    
-    This is a placeholder - in practice, this could be a learned neural network.
-    For now, uses a quadratic form with learned parameters.
-    
+    Apply nonlinear preference functional G_η(u) -> right now this is a quadratic formed with learned parameters - in practice, this could be a learned neural network.
+
     Args:
         u: Predictor coordinates, shape (batch_size, num_predictors)
         eta: Preference parameters, shape (batch_size, output_dim)
@@ -280,13 +277,13 @@ def apply_nonlinear_preference(
         linear = torch.sum(eta_linear * u, dim=-1)
         return quadratic + linear
     else:
-        # Fallback to linear
+        # fallback to linear
+        print("falling back to linear")
         min_dim = min(eta_dim, num_preds)
         return torch.sum(eta[:, :min_dim] * u[:, :min_dim], dim=-1)
 
-
 def create_comprehensive_plots(training_metrics: Dict, output_dir: Path, predictors: Dict):
-    """create comprehensive visualization of training progress and distribution changes."""
+    """visualization of training progress and distribution changes."""
     fig = plt.figure(figsize=(20, 14))
     gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
     
@@ -452,13 +449,8 @@ def evaluate_model(
     
     for prompt in prompts:
         log_func(f"Evaluating on prompt: {prompt}")
-        
-        # sample peptides for this prompt
         test_peptides = base_generator.sample_unconditioned(num_samples=20)
-        
-        # get predictor scores
         predictor_scores = score_peptides_with_predictors(test_peptides, predictors)
-        
         # encode prompt
         with torch.no_grad():
             prompt_embedding = text_encoder.encode([prompt])
@@ -612,7 +604,7 @@ def train_preference_network(
         "start_time": datetime.now().isoformat()
     }
     
-    global_batch_idx = 0  # track batch index across all epochs
+    global_batch_idx = 0
     
     def log(message):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -748,11 +740,10 @@ def train_preference_network(
                     prompt_embeddings,
                     batch_labels,
                     use_linear,
-                    eta=eta  # Pass pre-computed eta to avoid recomputation
+                    eta=eta
                 )
                 
                 # Add regularization L_reg(ψ) on preference parameters η(i) as per algorithm Line 30
-                # Regularize to avoid extreme utilities (e.g., l2 on η(i))
                 if reg_weight > 0:
                     l2_reg = torch.mean(eta.pow(2.0).sum(dim=-1))
                     loss = loss + reg_weight * l2_reg
@@ -1000,11 +991,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Load config
     with open(args.config, 'r') as f:
         config = json.load(f)
-    
-    # Load frozen models
     print("=" * 80)
     print("LOADING MODELS FOR TRAINING")
     print("=" * 80)
@@ -1025,9 +1013,6 @@ def main():
     print(f"\n[Text Encoder] Loading text encoder: {config['text_encoder_name']}")
     text_encoder = load_text_encoder(config['text_encoder_name'], device=actual_device)
     print(f"[Text Encoder] Loaded successfully on {text_encoder.device}")
-    # Text encoder is already frozen (model set to eval mode in __init__)
-    
-    # Load frozen predictors
     print(f"\n[Predictors] Loading {len(config['predictors'])} predictor(s)...")
     predictors = {}
     # Get protein sequence from config if available (for binding predictor)
@@ -1044,7 +1029,7 @@ def main():
             )
             print(f"[Predictors] Binding predictor loaded on {predictors['binding'].device}")
         elif pred_name == 'toxicity':
-            predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'])
+            predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'], device=actual_device)
             print(f"[Predictors] Toxicity predictor loaded")
         elif pred_name == 'halflife':
             predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
@@ -1056,11 +1041,7 @@ def main():
     base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
     print(f"[Base Generator] Loaded successfully")
     
-    # Algorithm Line 1: prompt distribution T
-    # The prompt distribution T is a list of natural language prompts.
-    # During training (Algorithm Line 9), prompts are sampled from this distribution.
-    # You can define your own prompts in the config file under "training_prompts",
-    # or use the defaults below. Each prompt should describe desired peptide properties.
+    # here are defaults but can also be defined in the config file 
     prompts = config.get('training_prompts', [
         "Generate a peptide with high binding affinity and low toxicity",
         "Generate a stable peptide with long half-life",
@@ -1070,9 +1051,6 @@ def main():
     print(f"\n[Prompt Distribution T] Using {len(prompts)} training prompt(s):")
     for i, prompt in enumerate(prompts, 1):
         print(f"  {i}. {prompt}")
-    
-    # Initialize preference network (only trainable component)
-    # Get embedding dimension from text encoder
     print(f"\n[Preference Network] Detecting embedding dimension...")
     print("(This may take a moment to load the Qwen model on first run...)")
     try:
@@ -1101,7 +1079,7 @@ def main():
     print(f"  - Number of predictors: {num_predictors}")
     
     preference_net = PreferenceNet(
-        input_dim=embedding_dim,  # Auto-detect from text encoder
+        input_dim=embedding_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
         num_predictors=num_predictors
@@ -1156,7 +1134,6 @@ def main():
         output_dir=args.output_dir
     )
     
-    # determine output directory
     if args.output_dir:
         output_dir = Path(args.output_dir)
     else:

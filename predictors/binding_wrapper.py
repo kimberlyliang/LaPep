@@ -1,8 +1,16 @@
 import torch
 import sys
+import esm
+import pandas as pd
+import warnings
 import numpy as np
 from pathlib import Path
 from typing import Optional
+from scoring.functions.binding import ImprovedBindingPredictor, BindingAffinity
+from transformers import AutoModelForMaskedLM
+from .binding import BindingPredictor
+from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
+
 
 lapep_root = Path(__file__).parent.parent.resolve()
 tr2d2_paths = [lapep_root / "lapep" / "tr2d2"]
@@ -22,33 +30,12 @@ if tr2d2_path is None:
     BindingAffinity = None
 else:
     missing_deps = []
-    try:
-        import pandas
-    except ImportError:
-        missing_deps.append("pandas")
-    try:
-        import esm
-    except ImportError:
-        missing_deps.append("fair-esm (esm)")
-    
     if missing_deps:
         TR2D2_AVAILABLE = False
         ImprovedBindingPredictor = None
         BindingAffinity = None
     else:
-        # Suppress warnings before importing
-        import warnings
-        warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
-        warnings.filterwarnings('ignore', message='.*GenerationMixin.*')
-        warnings.filterwarnings('ignore', message='.*doesn\'t directly inherit.*')
-        warnings.filterwarnings('ignore', message='.*RoFormerForMaskedLM.*')
-        
-        from scoring.functions.binding import ImprovedBindingPredictor, BindingAffinity
-        from transformers import AutoModelForMaskedLM
         TR2D2_AVAILABLE = True
-
-from .binding import BindingPredictor
-
 
 class RealBindingPredictor(BindingPredictor):
     
@@ -153,7 +140,6 @@ class RealBindingPredictor(BindingPredictor):
                     tr2d2_path = lapep_root / "lapep" / "tr2d2"
                     if tr2d2_path.exists():
                         sys.path.insert(0, str(tr2d2_path))
-                        from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
                         tokenizer = SMILES_SPE_Tokenizer(tokenizer_vocab, tokenizer_splits)
                         print(f"[Binding Predictor] Using local SMILES_SPE_Tokenizer from {tokenizer_vocab}")
                     else:
@@ -161,8 +147,7 @@ class RealBindingPredictor(BindingPredictor):
                 else:
                     print(f"[Binding Predictor] Warning: Could not find local tokenizer files, will try HuggingFace tokenizer")
             except Exception as e:
-                print(f"[Binding Predictor] Warning: Could not load local tokenizer: {e}")
-                print(f"[Binding Predictor] Will try HuggingFace tokenizer instead")
+                print(f"[Binding Predictor] Warning: Could not load local tokenizer: {e} so will try HuggingFace tokenizer instead")
         
         return cls(path, protein_seq, tokenizer, base_path, device)
 

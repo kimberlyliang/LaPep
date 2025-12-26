@@ -53,14 +53,11 @@ class Roformer(nn.Module):
                         param.requires_grad = True
             
     def forward(self, input_ids, attn_mask):
-        
         input_ids = input_ids.to(self.device)
         attn_mask = attn_mask.to(self.device)
 
         # get logits embeddings
         logits = self.model(input_ids=input_ids, attention_mask=attn_mask)
-        # return logits
-        #print(logits.logits)
         return logits.logits
     
     def save_model(self, save_dir):

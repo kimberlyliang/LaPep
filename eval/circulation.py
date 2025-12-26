@@ -65,6 +65,20 @@ def evaluate_path_independence(
         )
         circulations.append(circ)
     
+    # Handle empty circulations array
+    if len(circulations) == 0:
+        print(f"Warning: No valid cycles found after {num_cycles} attempts. "
+              f"This may indicate issues with the base generator's neighbor graph.")
+        return {
+            'mean_circulation': 0.0,
+            'std_circulation': 0.0,
+            'max_circulation': 0.0,
+            'min_circulation': 0.0,
+            'zero_circulation_ratio': 1.0,
+            'circulations': [],
+            'num_valid_cycles': 0
+        }
+    
     circulations = np.array(circulations)
     
     return {
@@ -73,48 +87,98 @@ def evaluate_path_independence(
         'max_circulation': float(np.max(np.abs(circulations))),
         'min_circulation': float(np.min(circulations)),
         'zero_circulation_ratio': float(np.mean(np.abs(circulations) < 1e-6)),
-        'circulations': circulations.tolist()
+        'circulations': circulations.tolist(),
+        'num_valid_cycles': len(circulations)
     }
 
 
 def _sample_random_cycle(
     base_generator,
-    length: int
+    length: int,
+    max_attempts: int = 10
 ) -> Optional[List[str]]:
     """
     Sample a random cycle of specified length from the edit graph.
     
     Returns a list of states [x0, x1, ..., x_{n-1}, x0] forming a cycle.
+    Tries multiple attempts to form a valid cycle.
     """
-    # Start from a random state
-    x0 = base_generator.sample_initial_state()
-    cycle = [x0]
-    current = x0
-    
-    for _ in range(length):
-        # Get neighbors
-        neighbors = base_generator.get_neighbors(current)
-        if len(neighbors) == 0:
-            return None
+    for attempt in range(max_attempts):
+        # Start from a random state
+        x0 = base_generator.sample_initial_state()
+        cycle = [x0]
+        current = x0
+        visited = {x0}
         
-        # Random walk to next state
-        next_state = neighbors[np.random.randint(len(neighbors))]
-        cycle.append(next_state)
-        current = next_state
+        # Random walk
+        for step in range(length):
+            # Get neighbors
+            neighbors = base_generator.get_neighbors(current)
+            if len(neighbors) == 0:
+                break
+            
+            # Filter to unvisited neighbors (to avoid immediate backtracking)
+            unvisited_neighbors = [n for n in neighbors if n not in visited]
+            if len(unvisited_neighbors) == 0:
+                # If all neighbors visited, allow revisiting
+                unvisited_neighbors = neighbors
+            
+            # Random walk to next state
+            next_state = unvisited_neighbors[np.random.randint(len(unvisited_neighbors))]
+            cycle.append(next_state)
+            current = next_state
+            visited.add(current)
+        
+        # Try to close the cycle
+        if current == x0:
+            return cycle
+        
+        # Check if we can close in one step
+        neighbors = base_generator.get_neighbors(current)
+        if x0 in neighbors:
+            cycle.append(x0)
+            return cycle
+        
+        # Try simple BFS to find path back to x0 (limited depth)
+        path_back = _find_short_path(current, x0, base_generator, max_depth=3)
+        if path_back:
+            cycle.extend(path_back[1:])  # Skip first element (current)
+            return cycle
     
-    # Try to close the cycle (return to x0 or a neighbor of x0)
-    if current == x0:
-        return cycle
+    # If all attempts failed, try a shorter cycle
+    if length > 2:
+        return _sample_random_cycle(base_generator, length - 1, max_attempts=5)
     
-    # Check if we can close in one step
-    neighbors = base_generator.get_neighbors(current)
-    if x0 in neighbors:
-        cycle.append(x0)
-        return cycle
+    return None
+
+
+def _find_short_path(
+    start: str,
+    target: str,
+    base_generator,
+    max_depth: int = 3
+) -> Optional[List[str]]:
+    """Simple BFS to find a short path from start to target."""
+    if start == target:
+        return [start]
     
-    # If not, try to find a path back
-    # For simplicity, we'll just check if current is a neighbor of x0
-    # In practice, might need BFS for longer cycles
+    queue = [(start, [start])]
+    visited = {start}
+    
+    for depth in range(max_depth):
+        next_queue = []
+        for current, path in queue:
+            neighbors = base_generator.get_neighbors(current)
+            for neighbor in neighbors:
+                if neighbor == target:
+                    return path + [neighbor]
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    next_queue.append((neighbor, path + [neighbor]))
+        queue = next_queue
+        if not queue:
+            break
+    
     return None
 
 

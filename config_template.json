@@ -13,10 +13,6 @@
     "toxicity": {
       "path": "pretrained/predictors/toxicity_predictor.pkl",
       "type": "toxicity"
-    },
-    "halflife": {
-      "path": "pretrained/predictors/halflife_predictor.pkl",
-      "type": "halflife"
     }
   },
   "constraints": {

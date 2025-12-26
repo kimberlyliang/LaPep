@@ -13,21 +13,15 @@ import torchmetrics
 from dataclasses import dataclass
 import gc
 import utils.utils as utils
-
+import os
 from tokenizer.my_tokenizers import SMILES_SPE_Tokenizer
 import noise_schedule
 from torch.optim.lr_scheduler import _LRScheduler
 import roformer as roformer 
 from utils.app import PeptideAnalyzer
 import pandas as pd
-
-# Auto-detect base_path from current file location
-# This file is at: lapep/tr2d2/diffusion.py
-# base_path should point to the Research directory (parent of LaPep)
 from pathlib import Path
 _current_file = Path(__file__).resolve()
-# Go from lapep/tr2d2/diffusion.py -> Research directory
-# lapep/tr2d2 -> lapep -> LaPep -> Research
 _lapep_root = _current_file.parent.parent.parent  # LaPep project root
 _research_dir = _lapep_root.parent  # Research directory
 base_path = str(_research_dir)
@@ -156,10 +150,6 @@ class Diffusion(L.LightningModule):
                 
         # PeptideCLM tokenizer 
         if tokenizer is None:
-            # Try to find tokenizer files automatically
-            import os
-            from pathlib import Path
-            # Try to infer base_path from current file location
             current_file = Path(__file__).resolve()
             # Look for tokenizer files relative to this file
             possible_vocab = current_file.parent / "tokenizer" / "new_vocab.txt"

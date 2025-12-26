@@ -17,7 +17,8 @@ def compute_potential(
     text_encoder: Optional[any],
     preference_net: Optional[any],
     constraints: Optional[Dict] = None,
-    use_linear_preferences: bool = False
+    use_linear_preferences: bool = False,
+    eta: Optional[any] = None
 ) -> float:
     """
     Compute the LaPep potential U(x;t) = -R(x;t) + Ψ(x).
@@ -30,15 +31,22 @@ def compute_potential(
         preference_net: Trained preference network g_ψ
         constraints: Optional dict with constraint weights and penalty functions
         use_linear_preferences: If True, use linear preference functional
+        eta: Optional pre-computed preference parameters (avoids re-encoding prompt)
         
     Returns:
         Scalar potential value (lower is better)
     """
     psi = compute_constraint_penalty(x, predictors, constraints)
 
-    if prompt is not None and text_encoder is not None and preference_net is not None:
+    if eta is not None:
+        # Use pre-computed eta (performance optimization)
         r = compute_preference_score(
-            x, prompt, predictors, text_encoder, preference_net, use_linear_preferences
+            x, predictors, use_linear_preferences, eta=eta
+        )
+    elif prompt is not None and text_encoder is not None and preference_net is not None:
+        r = compute_preference_score(
+            x, predictors, use_linear_preferences,
+            prompt=prompt, text_encoder=text_encoder, preference_net=preference_net
         )
     else:
         r = 0.0
@@ -150,11 +158,12 @@ def default_penalty_function(u: float, pred_name: str) -> float:
 
 def compute_preference_score(
     x: str,
-    prompt: str,
     predictors: Dict,
-    text_encoder: any,
-    preference_net: any,
-    use_linear_preferences: bool = False
+    use_linear_preferences: bool = False,
+    prompt: Optional[str] = None,
+    text_encoder: Optional[any] = None,
+    preference_net: Optional[any] = None,
+    eta: Optional[any] = None
 ) -> float:
     """
     Algorithm 1, Line 23: Compute prompt-dependent preference score R(x;t) = G_η(t)(u(x)).
@@ -171,20 +180,26 @@ def compute_preference_score(
     
     Args:
         x: Peptide SMILES string
-        prompt: Natural language prompt t
         predictors: Dict of predictor objects
-        text_encoder: Frozen text encoder E_text
-        preference_net: Trained preference network g_ψ*
         use_linear_preferences: If True, use linear functional η^T u instead of nonlinear
+        prompt: Natural language prompt t (required if eta not provided)
+        text_encoder: Frozen text encoder E_text (required if eta not provided)
+        preference_net: Trained preference network g_ψ* (required if eta not provided)
+        eta: Optional pre-computed preference parameters (performance optimization)
         
     Returns:
         Preference score R(x;t) (higher is better for the prompt)
     """
-    prompt_embedding = text_encoder.encode(prompt)
-    if isinstance(prompt_embedding, torch.Tensor):
-        prompt_embedding = prompt_embedding.unsqueeze(0)
+    # Compute eta if not provided (for backward compatibility)
+    if eta is None:
+        if prompt is None or text_encoder is None or preference_net is None:
+            return 0.0
+        prompt_embedding = text_encoder.encode(prompt)
+        if isinstance(prompt_embedding, torch.Tensor):
+            prompt_embedding = prompt_embedding.unsqueeze(0)
+        eta = preference_net(prompt_embedding)
     
-    eta = preference_net(prompt_embedding)
+    # Compute normalized predictor coordinates u(x)
     u = []
     for pred_name, predictor in predictors.items():
         raw_value = predictor.predict(x)
@@ -193,7 +208,7 @@ def compute_preference_score(
     
     u = np.array(u)
     
-    #  preference functional
+    # Compute preference functional
     if use_linear_preferences:
         # Linear: R(x;t) = η^T u
         if isinstance(eta, torch.Tensor):
@@ -221,7 +236,7 @@ def apply_nonlinear_preference(
     Apply nonlinear preference functional G_η(u).
     
     This can be a neural network, polynomial, or other nonlinear function.
-    For now, implements a simple MLP-like transformation.
+    For now, implements a simple MLP-like quadratic transformation.
     """
     if isinstance(eta, torch.Tensor):
         eta = eta.detach().cpu().numpy()

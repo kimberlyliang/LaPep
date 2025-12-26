@@ -88,7 +88,7 @@ def sample_peptide(
         log_weights = []
         U_X_s = compute_potential(
             X_s, prompt, predictors, text_encoder, preference_net,
-            constraints, use_linear_preferences
+            constraints, use_linear_preferences, eta=eta
         )
         
         for x_prime in C_s:
@@ -98,7 +98,7 @@ def sample_peptide(
             # Potential difference
             U_x_prime = compute_potential(
                 x_prime, prompt, predictors, text_encoder, preference_net,
-                constraints, use_linear_preferences
+                constraints, use_linear_preferences, eta=eta
             )
             potential_tilt = 0.5 * (U_X_s - U_x_prime)
             
@@ -152,10 +152,19 @@ def sample_step(
     
     # Algorithm Lines 17-19: Compute log-unnormalized weights
     # log w(x') ← log b_θ(x' | X_s, τ) + ½ [U(X_s; t) – U(x'; t)]
+    # Pre-compute eta once for performance (avoids re-encoding prompt)
+    eta = None
+    if prompt is not None and text_encoder is not None and preference_net is not None:
+        e = text_encoder.encode(prompt)
+        if isinstance(e, torch.Tensor):
+            if len(e.shape) == 1:
+                e = e.unsqueeze(0)
+        eta = preference_net(e)
+    
     log_weights = []
     U_X_s = compute_potential(
         current_state, prompt, predictors, text_encoder, preference_net,
-        constraints, use_linear_preferences
+        constraints, use_linear_preferences, eta=eta
     )
     
     for x_prime in C_s:
@@ -165,7 +174,7 @@ def sample_step(
         # Potential difference
         U_x_prime = compute_potential(
             x_prime, prompt, predictors, text_encoder, preference_net,
-            constraints, use_linear_preferences
+            constraints, use_linear_preferences, eta=eta
         )
         potential_tilt = 0.5 * (U_X_s - U_x_prime)
         

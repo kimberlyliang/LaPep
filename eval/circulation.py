@@ -10,8 +10,9 @@ from typing import List, Tuple, Dict, Optional
 import torch
 from collections import defaultdict
 
-from lapep.kernel import compute_transition_kernel
+from lapep.kernel import compute_transition_kernel, compute_edge_flow
 from lapep.potential import compute_potential
+from lapep.sampler import sample_step
 
 
 def evaluate_path_independence(
@@ -19,7 +20,7 @@ def evaluate_path_independence(
     text_encoder,
     preference_net,
     predictors: Dict,
-    prompt: str,
+    prompt: Optional[str],
     num_cycles: int = 1000,
     cycle_length: int = 4,
     seed: int = 42
@@ -196,8 +197,6 @@ def _compute_cycle_circulation(
     Circulation = sum of edge flows F(x_i, x_{i+1}) around the cycle.
     For conservative flows, this should be zero.
     """
-    from ..lapep.kernel import compute_edge_flow
-    
     total_flow = 0.0
     
     for i in range(len(cycle) - 1):
@@ -302,8 +301,6 @@ def _sample_trajectory(
     length: int
 ) -> List[str]:
     """Sample a single trajectory using LaPep conditioning."""
-    from ..lapep.sampler import sample_step
-    
     trajectory = [initial_state]
     current = initial_state
     

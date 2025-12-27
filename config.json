@@ -23,11 +23,9 @@
   },
   "training_prompts": [
     "Generate a peptide with high binding affinity and low toxicity",
-    "Generate a stable peptide with long half-life",
-    "Generate a balanced peptide optimizing binding, toxicity, and half-life",
+    "Generate a balanced peptide optimizing binding and toxicity",
     "Create a peptide that binds strongly to the target protein",
-    "Design a peptide with minimal toxicity for therapeutic use",
-    "Generate a peptide with extended half-life in serum"
+    "Design a peptide with minimal toxicity for therapeutic use"
   ],
   "experiment_settings": {
     "num_samples": 1000,

@@ -17,6 +17,10 @@ import torch
 import sys
 import numpy as np
 from datetime import datetime
+
+# Add project root to Python path BEFORE importing project modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from eval.distribution_shift import (
     evaluate_language_conditioning_effect,
     format_results_table as format_distribution_table
@@ -39,12 +43,9 @@ from language.preference_net import load_preference_net
 from predictors.binding import BindingPredictor
 from predictors.toxicity import ToxicityPredictor
 from predictors.halflife import HalfLifePredictor
-from eval.distribution_shift import evaluate_language_conditioning_effect
 from eval.circulation import evaluate_path_independence
 from generators.diffusion_wrapper import load_diffusion_model
 from generators.dfm_wrapper import load_dfm_model
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def convert_to_serializable(obj):

@@ -93,7 +93,7 @@ def main():
     
     # Training arguments
     parser.add_argument('--config', type=str, required=True, help='Config file')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs (default: 10)')
+    parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs (default: 30)')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training pairs')
     parser.add_argument('--peptides_per_batch', type=int, default=16, help='Peptides to sample per batch')

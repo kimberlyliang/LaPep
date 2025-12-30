@@ -4,6 +4,7 @@ pretrained/**/*.pt
 pretrained/**/*.pth
 pretrained/**/*.pkl
 pretrained/**/*.h5
+pretrained/**/*.json
 
 # Training outputs
 docs/

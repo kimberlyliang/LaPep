@@ -101,12 +101,22 @@ python scripts/run_eval.py \
 
 ### Generating Peptides
 
+Use the controlled optimization script or prototype experiment for peptide generation:
+
 ```bash
-python scripts/sample_peptides.py \
+# Controlled optimization (Algorithm 3)
+python scripts/controlled_optimization.py \
     --config config.json \
-    --prompt "Generate a peptide with high binding affinity and low toxicity" \
-    --num_samples 100 \
-    --output peptides.txt
+    --protein_target <target_id> \
+    --starting_peptide <peptide_sequence> \
+    --num_samples 100
+
+# Prototype experiment (Algorithm 2)
+python scripts/run_prototype_experiment.py \
+    --config config.json \
+    --peptune_model <path> \
+    --dfm_model <path> \
+    --num_samples 500
 ```
 
 The code supports multiple text encoders via HuggingFace:

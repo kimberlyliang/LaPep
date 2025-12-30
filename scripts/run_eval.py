@@ -40,9 +40,7 @@ from eval.ablations import (
 from generators.base_generator import load_base_generator
 from language.text_encoder import load_text_encoder
 from language.preference_net import load_preference_net
-from predictors.binding import BindingPredictor
-from predictors.toxicity import ToxicityPredictor
-from predictors.halflife import HalfLifePredictor
+from predictors.loader import load_predictors
 from eval.circulation import evaluate_path_independence
 from generators.diffusion_wrapper import load_diffusion_model
 from generators.dfm_wrapper import load_dfm_model
@@ -130,18 +128,16 @@ def load_models(config_path: str, device: str = 'cuda', use_latest_model: bool =
     else:
         print(f"[Model Check] Embedding dimensions match: {actual_embedding_dim}")
     
-    predictors = {}
-    for pred_name, pred_config in config['predictors'].items():
-        if pred_name == 'binding':
-            predictors['binding'] = BindingPredictor.load(
-                pred_config['path'], 
-                device=device,
-                protein_seq=config.get('protein_seq')
-            )
-        elif pred_name == 'toxicity':
-            predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'], device=device)
-        elif pred_name == 'halflife':
-            predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
+    # Determine format from generator type
+    generator_type = config.get('generator_type', config.get('base_generator_type', 'pepmdlm'))
+    format_type = 'wt' if generator_type == 'pepdfm' else 'smiles'
+    
+    predictors = load_predictors(
+        config,
+        format_type=format_type,
+        device=device,
+        protein_seq=config.get('protein_seq')
+    )
     return base_generator, text_encoder, preference_net, predictors, config
 
 
@@ -439,8 +435,12 @@ def main():
         if torch.cuda.is_available():
             print(f"CUDA device: {torch.cuda.get_device_name(0)}")
     
-    output_dir = Path(args.output_dir)
+    # Create timestamped output directory to avoid overwriting previous results
+    base_output_dir = Path(args.output_dir)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = base_output_dir / f"eval_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nResults will be saved to: {output_dir}")
     
     print("Loading models...")
     base_generator, text_encoder, preference_net, predictors, config = load_models(
@@ -472,18 +472,42 @@ def main():
         )
     
     if '4.5' in experiments_to_run:
-        base_generators = {
-            'masked_discrete_diffusion': load_diffusion_model(config.get('diffusion_model_path')),
-            'discrete_flow_matching': load_dfm_model(config.get('dfm_model_path'))
-        }
+        base_generators = {}
         
-        run_experiment_4_5(
-            base_generators, text_encoder, preference_net, predictors, output_dir
-        )
+        # Try to load additional generators if available
+        # Note: Currently only PepMDLM is fully implemented
+        try:
+            if config.get('diffusion_model_path'):
+                base_generators['masked_discrete_diffusion'] = load_diffusion_model(
+                    config.get('diffusion_model_path')
+                )
+        except NotImplementedError as e:
+            print(f"[Experiment 4.5] Skipping diffusion model: {e}")
+        
+        try:
+            if config.get('dfm_model_path'):
+                base_generators['discrete_flow_matching'] = load_dfm_model(
+                    config.get('dfm_model_path')
+                )
+        except NotImplementedError as e:
+            print(f"[Experiment 4.5] Skipping DFM model: {e}")
+        
+        # Always include the main generator (PepMDLM) for comparison
+        base_generators['peptune'] = base_generator
+        
+        if len(base_generators) < 2:
+            print(f"\n[Experiment 4.5] Warning: Only {len(base_generators)} generator(s) available.")
+            print("Experiment 4.5 requires multiple generators for comparison.")
+            print("Skipping experiment 4.5. Only PepMDLM is currently implemented.")
+        else:
+            run_experiment_4_5(
+                base_generators, text_encoder, preference_net, predictors, output_dir
+            )
     
     print("\n" + "="*80)
     print("All experiments completed")
-    print(f"Results saved to {output_dir}")
+    print(f"Results saved to: {output_dir}")
+    print(f"{'='*80}")
 
 
 if __name__ == '__main__':

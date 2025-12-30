@@ -16,11 +16,16 @@ def compute_transition_kernel(
     tau: int,
     constraints: Optional[Dict] = None,
     use_linear_preferences: bool = False,
-    eta: Optional[any] = None
+    eta: Optional[any] = None,
+    language_weight: float = 1.0
 ) -> np.ndarray:
     """
-    Compute the LaPep transition kernel q_θ(x'|x,t,τ) from Eq (10).
-    q_θ(x'|x,t,τ) = b_θ(x'|x,τ) * exp(0.5[U(x;t) - U(x';t)]) / Z(x)
+    Compute the LaPep transition kernel q_θ(x'|x,t,τ) using the symmetric form from Eq (30).
+    
+    Symmetric form (conservative): q_θ(x'|x,t,τ) = b_θ(x'|x,τ) * exp(0.5[U(x;t) - U(x';t)]) / Z_θ,t,τ(x)
+    
+    This symmetric form ensures path independence (zero circulation on cycles) as per Theorem B.4.
+    The normalization constant Z_θ,t,τ(x) ensures the kernel sums to 1 over candidates.
     Args:
         x: Current state
         candidates: List of candidate next states (including x itself)
@@ -42,7 +47,7 @@ def compute_transition_kernel(
     # potential at current state
     U_x = compute_potential(
         x, prompt, predictors, text_encoder, preference_net,
-        constraints, use_linear_preferences, eta=eta
+        constraints, use_linear_preferences, eta=eta, language_weight=language_weight
     )
     
     base_probs = []
@@ -57,7 +62,7 @@ def compute_transition_kernel(
     for candidate in candidates:
         U_candidate = compute_potential(
             candidate, prompt, predictors, text_encoder, preference_net,
-            constraints, use_linear_preferences, eta=eta
+            constraints, use_linear_preferences, eta=eta, language_weight=language_weight
         )
         
         # base log probability
@@ -90,7 +95,8 @@ def compute_edge_flow(
     tau: int,
     constraints: Optional[Dict] = None,
     use_linear_preferences: bool = False,
-    eta: Optional[any] = None
+    eta: Optional[any] = None,
+    language_weight: float = 1.0
 ) -> float:
     """
     Compute antisymmetric edge flow F(x,x') = log(q(x'|x) / q(x|x')).
@@ -125,7 +131,7 @@ def compute_edge_flow(
     probs_forward = compute_transition_kernel(
         x, candidates_forward, base_generator,
         text_encoder, preference_net, predictors,
-        prompt, tau, constraints, use_linear_preferences, eta=eta
+        prompt, tau, constraints, use_linear_preferences, eta=eta, language_weight=language_weight
     )
     q_forward = probs_forward[0]  # probability of x -> x'
     
@@ -133,7 +139,7 @@ def compute_edge_flow(
     probs_backward = compute_transition_kernel(
         x_prime, candidates_backward, base_generator,
         text_encoder, preference_net, predictors,
-        prompt, tau, constraints, use_linear_preferences, eta=eta
+        prompt, tau, constraints, use_linear_preferences, eta=eta, language_weight=language_weight
     )
     q_backward = probs_backward[0]  # probability of x' -> x
     

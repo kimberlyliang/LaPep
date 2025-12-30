@@ -6,22 +6,39 @@ Inital implementation and evaluation code for LaPep, a conservative discrete gen
 ## Structure
 
 ```
-lapep/
-├── generators/          # Base generator wrappers (b_θ)
-├── predictors/          # Hard predictor constraints
-├── language/            # Text encoder and preference network (g_ψ)
-│   └── text_encoder.py  # Supports Qwen, E5, BioGPT, SciBERT
+LaPep/
 ├── lapep/               # Core LaPep framework
-│   ├── potential.py    # U(x;t) = -R(x;t) + Ψ(x)
-│   ├── kernel.py       # Transition kernel (Eq 10)
-│   └── sampler.py       # Sampling procedure
-├── eval/                # Evaluation experiments
+│   ├── sampler.py       # Algorithm 2 & 3: Sampling procedures
+│   ├── kernel.py        # Transition kernel computation
+│   ├── potential.py     # Scalar potential U(x;t) = -R(x;t) + Ψ(x)
+│   └── tr2d2/           # TR2D2 integration (PepMDLM)
+├── generators/           # Base generator wrappers (b_θ)
+│   ├── peptune_wrapper.py  # PepMDLM (SMILES, discrete diffusion)
+│   └── dfm_wrapper.py      # PepDFM (WT, discrete flow matching)
+├── predictors/          # Hard predictor constraints
+│   ├── loader.py        # Unified predictor loader
+│   ├── wt/              # WT amino acid predictors
+│   └── smiles/          # SMILES predictors
+├── language/             # Language components
+│   ├── text_encoder.py  # Text encoder (E_text) - Supports Qwen, E5, BioGPT, SciBERT
+│   ├── preference_net.py # Preference network (g_ψ)
+│   └── llm_judge.py     # LLM judge for pairwise comparisons
+├── eval/                 # Evaluation experiments
 │   ├── distribution_shift.py    # Section 4.1
 │   ├── circulation.py           # Section 4.2
 │   ├── motif_analysis.py        # Section 4.3
 │   └── ablations.py             # Section 4.4
-├── scripts/             # Training and evaluation scripts
-└── pretrained/          # Model checkpoints directory
+├── scripts/              # Executable scripts (see scripts/README.md)
+├── data/                 # Data files and benchmarks
+├── pretrained/           # Model checkpoints directory
+├── docs/                  # Documentation (see docs/README.md)
+└── tests/                 # Unit tests
+```
+
+For detailed documentation, see:
+- **[docs/README.md](docs/README.md)**: Documentation index
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Architecture overview
+- **[scripts/README.md](scripts/README.md)**: Script usage guide
 ```
 
 ## Running Experiments

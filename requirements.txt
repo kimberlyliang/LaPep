@@ -8,13 +8,14 @@ transformers>=4.51.0
 accelerate>=0.24.0
 sentencepiece>=0.1.99
 protobuf>=3.20.0
-sentence-transformers>=2.7.0  # Recommended for Qwen3-Embedding models
+sentence-transformers>=2.7.0
+huggingface_hub>=0.20.0  # For downloading models from HuggingFace
 
-# TR2-D2 dependencies (for real models)
+# TR2-D2 dependencies (for PepMDLM/SMILES models)
 pandas>=2.0.0
-pytorch-lightning>=2.0.0 
-lightning>=2.0.0 
-fair-esm>=2.0.0 
+pytorch-lightning>=2.0.0
+lightning>=2.0.0
+fair-esm>=2.0.0
 torchmetrics>=0.11.0
 hydra-core>=1.3.0
 omegaconf>=2.3.0
@@ -24,7 +25,10 @@ fsspec>=2023.0.0
 tqdm>=4.66.0
 pyyaml>=6.0
 
-
+# Data processing and evaluation
 scikit-learn>=1.3.0
 matplotlib>=3.7.0
-pandas>=2.0.0
+openpyxl>=3.1.0  # For reading Excel files
+
+# Optional: For WT toxicity prediction (ToxinPred3)
+# subprocess-based, no Python package needed

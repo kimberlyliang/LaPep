@@ -27,9 +27,7 @@ except ImportError:
 
 from language.text_encoder import load_text_encoder
 from language.preference_net import PreferenceNet
-from predictors.binding import BindingPredictor
-from predictors.toxicity import ToxicityPredictor
-from predictors.halflife import HalfLifePredictor
+from predictors.loader import load_predictors
 
 
 def sample_peptide_batch(
@@ -536,7 +534,12 @@ def train_preference_network(
     peptides_per_batch: int = 16,
     judge_method: str = 'rule_based',
     llm_judge: Optional[Callable] = None,
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = None,
+    use_lr_scheduler: bool = True,
+    scheduler_patience: int = 5,
+    scheduler_factor: float = 0.5,
+    early_stopping_patience: int = 10,
+    early_stopping_min_delta: float = 0.001
 ):
     """
     Train preference network using the specified procedure.
@@ -570,7 +573,7 @@ def train_preference_network(
     
     optimizer = optim.Adam(preference_net.parameters(), lr=learning_rate)
     
-    # set up logging and results directory
+    # set up logging and results directory first (needed for log function)
     if output_dir is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = Path(f"results/training_{timestamp}")
@@ -587,6 +590,14 @@ def train_preference_network(
     log_file = output_dir / "logs" / "training.log"
     metrics_file = output_dir / "logs" / "metrics.json"
     
+    def log(message):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_msg = f"[{timestamp}] {message}"
+        print(log_msg)
+        with open(log_file, "a") as f:
+            f.write(log_msg + "\n")
+    
+    # Initialize training metrics
     training_metrics = {
         "epochs": [],
         "losses": [],
@@ -606,12 +617,23 @@ def train_preference_network(
     
     global_batch_idx = 0
     
-    def log(message):
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_msg = f"[{timestamp}] {message}"
-        print(log_msg)
-        with open(log_file, "a") as f:
-            f.write(log_msg + "\n")
+    # Learning rate scheduler: reduce LR on plateau
+    scheduler = None
+    if use_lr_scheduler:
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            mode='min', 
+            factor=scheduler_factor, 
+            patience=scheduler_patience,
+            min_lr=1e-6
+        )
+        log(f"Using learning rate scheduler: ReduceLROnPlateau (patience={scheduler_patience}, factor={scheduler_factor})")
+    
+    # Early stopping
+    best_loss = float('inf')
+    best_epoch = 0
+    epochs_without_improvement = 0
+    early_stopped = False
     
     log(f"Starting training with {num_epochs} epochs")
     log(f"Output directory: {output_dir}")
@@ -774,7 +796,27 @@ def train_preference_network(
         epoch_time = time.time() - epoch_start_time
         training_metrics["epoch_times"].append(float(epoch_time))
         
-        log(f"Epoch {epoch+1}/{num_epochs} completed: Average Loss: {avg_loss:.4f}, Time: {epoch_time:.2f}s")
+        # Update learning rate scheduler
+        if scheduler is not None:
+            scheduler.step(avg_loss)
+            current_lr = optimizer.param_groups[0]['lr']
+            log(f"Epoch {epoch+1}/{num_epochs} completed: Average Loss: {avg_loss:.4f}, LR: {current_lr:.6f}, Time: {epoch_time:.2f}s")
+        else:
+            log(f"Epoch {epoch+1}/{num_epochs} completed: Average Loss: {avg_loss:.4f}, Time: {epoch_time:.2f}s")
+        
+        # Early stopping check
+        if avg_loss < best_loss - early_stopping_min_delta:
+            best_loss = avg_loss
+            best_epoch = epoch + 1
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        
+        if early_stopping_patience > 0 and epochs_without_improvement >= early_stopping_patience:
+            log(f"Early stopping triggered: no improvement for {early_stopping_patience} epochs")
+            log(f"Best loss: {best_loss:.4f} at epoch {best_epoch}")
+            early_stopped = True
+            break
         
         # save metrics
         training_metrics["epochs"].append(epoch + 1)
@@ -817,7 +859,7 @@ def train_preference_network(
         
         # save checkpoint every epoch
         checkpoint_path = output_dir / "checkpoints" / f"checkpoint_epoch_{epoch+1}.ckpt"
-        torch.save({
+        checkpoint_data = {
             'epoch': epoch + 1,
             'state_dict': preference_net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
@@ -826,7 +868,16 @@ def train_preference_network(
             'hidden_dim': preference_net.hidden_dim,
             'output_dim': preference_net.output_dim,
             'num_predictors': preference_net.num_predictors
-        }, checkpoint_path)
+        }
+        if scheduler is not None:
+            checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
+        torch.save(checkpoint_data, checkpoint_path)
+        
+        # Save best model checkpoint
+        if epoch + 1 == best_epoch:
+            best_checkpoint_path = output_dir / "checkpoints" / "best_model.ckpt"
+            torch.save(checkpoint_data, best_checkpoint_path)
+            log(f"Saved best model checkpoint (loss: {best_loss:.4f}) to {best_checkpoint_path}")
         
         # save metrics to file
         with open(metrics_file, 'w') as f:
@@ -988,8 +1039,20 @@ def main():
                        help='Method for creating pairwise comparisons')
     parser.add_argument('--reg_weight', type=float, default=0.01, help='L2 regularization weight')
     parser.add_argument('--output_dir', type=str, default=None, help='Output directory for results (default: results/training_TIMESTAMP)')
+    parser.add_argument('--use_lr_scheduler', action='store_true', help='Use learning rate scheduler')
+    parser.add_argument('--no_lr_scheduler', dest='use_lr_scheduler', action='store_false', help='Disable learning rate scheduler')
+    parser.set_defaults(use_lr_scheduler=True)  # Default to True
+    parser.add_argument('--scheduler_patience', type=int, default=5, help='Patience for LR scheduler')
+    parser.add_argument('--scheduler_factor', type=float, default=0.5, help='Factor for LR reduction')
+    parser.add_argument('--early_stopping_patience', type=int, default=10, help='Patience for early stopping')
+    parser.add_argument('--early_stopping_min_delta', type=float, default=0.001, help='Minimum delta for early stopping')
     
     args = parser.parse_args()
+    
+    # Handle use_lr_scheduler default (argparse quirk with store_true/store_false)
+    # If neither flag is provided, default to True
+    if not hasattr(args, 'use_lr_scheduler'):
+        args.use_lr_scheduler = True
     
     with open(args.config, 'r') as f:
         config = json.load(f)
@@ -1013,27 +1076,17 @@ def main():
     print(f"\n[Text Encoder] Loading text encoder: {config['text_encoder_name']}")
     text_encoder = load_text_encoder(config['text_encoder_name'], device=actual_device)
     print(f"[Text Encoder] Loaded successfully on {text_encoder.device}")
-    print(f"\n[Predictors] Loading {len(config['predictors'])} predictor(s)...")
-    predictors = {}
-    # Get protein sequence from config if available (for binding predictor)
-    protein_seq = config.get('protein_seq', None)
+    print(f"\n[Predictors] Loading predictors...")
+    # Determine format from generator type
+    generator_type = config.get('generator_type', config.get('base_generator_type', 'pepmdlm'))
+    format_type = 'wt' if generator_type == 'pepdfm' else 'smiles'
     
-    for pred_name, pred_config in config['predictors'].items():
-        print(f"[Predictors] Loading {pred_name} predictor from: {pred_config['path']}")
-        if pred_name == 'binding':
-            # Try to load real binding predictor if protein_seq is provided
-            predictors['binding'] = BindingPredictor.load(
-                pred_config['path'],
-                protein_seq=protein_seq,
-                device=actual_device
-            )
-            print(f"[Predictors] Binding predictor loaded on {predictors['binding'].device}")
-        elif pred_name == 'toxicity':
-            predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'], device=actual_device)
-            print(f"[Predictors] Toxicity predictor loaded")
-        elif pred_name == 'halflife':
-            predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
-            print(f"[Predictors] Half-life predictor loaded")
+    predictors = load_predictors(
+        config,
+        format_type=format_type,
+        device=actual_device,
+        protein_seq=config.get('protein_seq')
+    )
     
     # Load frozen base generator
     print(f"\n[Base Generator] Loading base generator from: {config['base_generator_path']}")
@@ -1131,7 +1184,12 @@ def main():
         peptides_per_batch=args.peptides_per_batch,
         judge_method=args.judge_method,
         llm_judge=llm_judge,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        use_lr_scheduler=args.use_lr_scheduler,
+        scheduler_patience=args.scheduler_patience,
+        scheduler_factor=args.scheduler_factor,
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta
     )
     
     if args.output_dir:

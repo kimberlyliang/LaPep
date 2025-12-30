@@ -66,7 +66,6 @@ def main():
     with open(output_path, 'w') as f:
         for peptide in peptides:
             f.write(peptide + '\n')
-    
     print(f"Saved {len(peptides)} peptides to {output_path}")
 
 

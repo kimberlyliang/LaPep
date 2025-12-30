@@ -1,13 +1,8 @@
 """
 not for right now 
-LLM-based Judge for Pairwise Comparisons
-
-Future module for using an LLM to judge which peptide should be preferred
-under a given prompt, instead of using simple rule-based comparisons.
 """
 
 from typing import Callable, Optional
-import openai
 
 
 def create_llm_judge(

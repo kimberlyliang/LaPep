@@ -18,10 +18,21 @@ class BindingPredictor:
         return np.random.uniform(6.0, 8.0)
     
     def normalize(self, value: float) -> float:
+        """
+        Normalize a binding affinity value to [0, 1] using empirical CDF.
+        
+        If reference_cdf is None, uses linear normalization.
+        Otherwise, computes percentile rank using searchsorted.
+        """
         if self.reference_cdf is None:
             normalized = (value - 4.0) / (10.0 - 4.0)
             return float(np.clip(normalized, 0.0, 1.0))
-        percentile = np.searchsorted(self.reference_cdf, value) / len(self.reference_cdf)
+        
+        # Compute percentile rank: find position in sorted CDF
+        # searchsorted returns the index where value would be inserted to maintain order
+        idx = np.searchsorted(self.reference_cdf, value, side='right')
+        # Convert to percentile [0, 1]
+        percentile = idx / len(self.reference_cdf)
         return float(np.clip(percentile, 0.0, 1.0))
     
     def _default_cdf(self):

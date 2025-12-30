@@ -16,13 +16,8 @@ eval_module = importlib.util.module_from_spec(eval_spec)
 eval_spec.loader.exec_module(eval_module)
 from language.preference_net import PreferenceNet, load_preference_net
 from generators.base_generator import load_base_generator
-from predictors.binding import BindingPredictor
-from predictors.toxicity import ToxicityPredictor
-from predictors.halflife import HalfLifePredictor
-from language.preference_net import PreferenceNet
-from generators.base_generator import load_base_generator
 from language.text_encoder import load_text_encoder
-from language.preference_net import load_preference_net
+from predictors.loader import load_predictors
 from generators.diffusion_wrapper import load_diffusion_model
 from generators.dfm_wrapper import load_dfm_model
 
@@ -148,17 +143,16 @@ def main():
         print("\n[Training] Loading models...")
         text_encoder = load_text_encoder(config['text_encoder_name'], device=actual_device)
         
-        predictors = {}
-        protein_seq = config.get('protein_seq', None)
-        for pred_name, pred_config in config['predictors'].items():
-            if pred_name == 'binding':
-                predictors['binding'] = BindingPredictor.load(
-                    pred_config['path'], protein_seq=protein_seq, device=actual_device
-                )
-            elif pred_name == 'toxicity':
-                predictors['toxicity'] = ToxicityPredictor.load(pred_config['path'])
-            elif pred_name == 'halflife':
-                predictors['halflife'] = HalfLifePredictor.load(pred_config['path'])
+        # Determine format from generator type
+        generator_type = config.get('generator_type', config.get('base_generator_type', 'pepmdlm'))
+        format_type = 'wt' if generator_type == 'pepdfm' else 'smiles'
+        
+        predictors = load_predictors(
+            config,
+            format_type=format_type,
+            device=actual_device,
+            protein_seq=config.get('protein_seq')
+        )
         
         base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
         prompts = config.get('training_prompts', [

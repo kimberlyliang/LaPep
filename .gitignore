@@ -6,6 +6,7 @@ pretrained/**/*.pkl
 pretrained/**/*.h5
 
 # Training outputs
+docs/
 results/
 checkpoints/
 logs/

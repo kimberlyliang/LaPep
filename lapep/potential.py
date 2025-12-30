@@ -18,10 +18,16 @@ def compute_potential(
     preference_net: Optional[any],
     constraints: Optional[Dict] = None,
     use_linear_preferences: bool = False,
-    eta: Optional[any] = None
+    eta: Optional[any] = None,
+    language_weight: float = 1.0
 ) -> float:
     """
-    Compute the LaPep potential U(x;t) = -R(x;t) + Ψ(x).
+    Compute the LaPep potential U(x;t) = -α·R(x;t) + Ψ(x).
+    
+    The language weight α controls the strength of language conditioning relative to constraints:
+    - α = 0: Predictor-only conditioning (no language effect)
+    - α = 1: Normal language conditioning
+    - α > 1: Stronger language effect relative to constraints
     
     Args:
         x: Peptide SMILES string
@@ -32,6 +38,7 @@ def compute_potential(
         constraints: Optional dict with constraint weights and penalty functions
         use_linear_preferences: If True, use linear preference functional
         eta: Optional pre-computed preference parameters (avoids re-encoding prompt)
+        language_weight: Weight α for language preference term (default: 1.0)
         
     Returns:
         Scalar potential value (lower is better)
@@ -51,7 +58,8 @@ def compute_potential(
     else:
         r = 0.0
     
-    U = -r + psi
+    # Scale language preference by language_weight
+    U = -language_weight * r + psi
     
     return U
 

@@ -186,10 +186,14 @@ def _count_motifs(
     """Count occurrences of motifs in samples."""
     counts = Counter()
     
-    for sample in samples:
-        for motif_pattern in motifs:
-            matches = re.findall(motif_pattern, sample)
-            counts[motif_pattern] += len(matches)
+    # Convert SMILES to amino acid sequences for motif analysis
+    sequences = _smiles_to_sequences(samples)
+    
+    for seq in sequences:
+        if seq:  # Only process if conversion succeeded
+            for motif_pattern in motifs:
+                matches = re.findall(motif_pattern, seq)
+                counts[motif_pattern] += len(matches)
     
     return counts
 
@@ -201,10 +205,14 @@ def _count_modification_sites(
     """Count modification sites in samples."""
     counts = Counter()
     
-    for sample in samples:
-        for pattern in patterns:
-            matches = re.findall(pattern, sample)
-            counts[pattern] += len(matches)
+    # Convert SMILES to amino acid sequences for modification site analysis
+    sequences = _smiles_to_sequences(samples)
+    
+    for seq in sequences:
+        if seq:  # Only process if conversion succeeded
+            for pattern in patterns:
+                matches = re.findall(pattern, seq)
+                counts[pattern] += len(matches)
     
     return counts
 
@@ -220,40 +228,90 @@ def _compute_heuristic_score(
     """
     scores = []
     
-    for sample in samples:
+    # Convert SMILES to amino acid sequences
+    sequences = _smiles_to_sequences(samples)
+    
+    for seq in sequences:
+        if not seq:  # Skip if conversion failed
+            scores.append(0.0)
+            continue
+            
         score = 0.0
         
-        # Length-based heuristics
-        if 8 <= len(sample) <= 30:  # Typical therapeutic peptide length
+        # Length-based heuristics (on amino acid sequence length)
+        if 8 <= len(seq) <= 30:  # Typical therapeutic peptide length
             score += 0.2
         
         # Charge-based (simple approximation)
-        positive_charges = sample.count('K') + sample.count('R')
-        negative_charges = sample.count('D') + sample.count('E')
+        positive_charges = seq.count('K') + seq.count('R')
+        negative_charges = seq.count('D') + seq.count('E')
         net_charge = positive_charges - negative_charges
         if -2 <= net_charge <= 2:  # Neutral to slightly charged
             score += 0.2
         
         # Hydrophobicity (simple approximation)
-        hydrophobic = sample.count('A') + sample.count('V') + sample.count('I') + \
-                     sample.count('L') + sample.count('M') + sample.count('F')
-        hydrophobic_ratio = hydrophobic / len(sample) if sample else 0
+        hydrophobic = seq.count('A') + seq.count('V') + seq.count('I') + \
+                     seq.count('L') + seq.count('M') + seq.count('F')
+        hydrophobic_ratio = hydrophobic / len(seq) if seq else 0
         if 0.2 <= hydrophobic_ratio <= 0.5:  # Moderate hydrophobicity
             score += 0.2
         
         # Proline content (stability)
-        proline_ratio = sample.count('P') / len(sample) if sample else 0
+        proline_ratio = seq.count('P') / len(seq) if seq else 0
         if 0.05 <= proline_ratio <= 0.15:
             score += 0.2
         
         # Cysteine content (potential for disulfide bonds)
-        cys_ratio = sample.count('C') / len(sample) if sample else 0
+        cys_ratio = seq.count('C') / len(seq) if seq else 0
         if cys_ratio > 0 and cys_ratio <= 0.1:
             score += 0.2
         
         scores.append(score)
     
     return np.mean(scores) if scores else 0.0
+
+
+def _smiles_to_sequences(samples: List[str]) -> List[str]:
+    """
+    Convert SMILES strings to amino acid sequences.
+    
+    Returns list of one-letter amino acid sequences, or empty strings if conversion fails.
+    """
+    sequences = []
+    
+    # Try to import PeptideAnalyzer
+    try:
+        import sys
+        from pathlib import Path
+        lapep_root = Path(__file__).parent.parent
+        tr2d2_utils_path = lapep_root / "lapep" / "tr2d2" / "utils"
+        
+        if (tr2d2_utils_path / "app.py").exists():
+            sys.path.insert(0, str(tr2d2_utils_path.parent))
+            from utils.app import PeptideAnalyzer
+            analyzer = PeptideAnalyzer()
+            
+            for smiles in samples:
+                try:
+                    # Use return_sequence to get amino acid sequence
+                    seq_list = analyzer.return_sequence(smiles)
+                    # Convert three-letter codes to one-letter codes
+                    one_letter = ''.join(
+                        analyzer.three_to_one.get(aa.split('(')[0], 'X') 
+                        for aa in seq_list
+                    )
+                    sequences.append(one_letter)
+                except Exception as e:
+                    # If conversion fails, return empty string
+                    sequences.append("")
+        else:
+            # If analyzer not available, return empty sequences
+            sequences = [""] * len(samples)
+    except Exception as e:
+        # If import fails, return empty sequences
+        sequences = [""] * len(samples)
+    
+    return sequences
 
 
 def compare_to_baseline(

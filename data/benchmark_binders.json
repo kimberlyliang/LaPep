@@ -1,0 +1,301 @@
+{
+  "1AYC": {
+    "protein_id": "1AYC",
+    "starting_peptide": "DGGYMDMSKGS",
+    "num_peptides": 1,
+    "all_peptides": [
+      "DGGYMDMSKGS"
+    ],
+    "designed_binder": "YAYRYICYYCD",
+    "all_designed_peptides": [
+      "YAYRYICYYCD"
+    ],
+    "target_motifs": "29,31,32,33,39,49,50,51,52,62,87",
+    "all_motifs": [
+      "29,31,32,33,39,49,50,51,52,62,87"
+    ],
+    "designed_iptm": 0.64,
+    "designed_vina_score": -4.9,
+    "site_matching": "yes",
+    "binding_affinity": -6.1
+  },
+  "1B8Q": {
+    "protein_id": "1B8Q",
+    "starting_peptide": "VVKVDSV",
+    "num_peptides": 1,
+    "all_peptides": [
+      "VVKVDSV"
+    ],
+    "designed_binder": "IVDWVCF",
+    "all_designed_peptides": [
+      "IVDWVCF"
+    ],
+    "target_motifs": "20,21,22,24,25,26,27,28,38,71,75",
+    "all_motifs": [
+      "20,21,22,24,25,26,27,28,38,71,75"
+    ],
+    "designed_iptm": 0.72,
+    "designed_vina_score": -5.6,
+    "site_matching": "yes",
+    "binding_affinity": -5.1
+  },
+  "1DDV": {
+    "protein_id": "1DDV",
+    "starting_peptide": "TPPSPF",
+    "num_peptides": 1,
+    "all_peptides": [
+      "TPPSPF"
+    ],
+    "designed_binder": "RCVRWC",
+    "all_designed_peptides": [
+      "RCVRWC"
+    ],
+    "target_motifs": "8,18,65,67,68,83,84",
+    "all_motifs": [
+      "8,18,65,67,68,83,84"
+    ],
+    "designed_iptm": 0.89,
+    "designed_vina_score": -6.5,
+    "binding_affinity": -6.1
+  },
+  "1E6I": {
+    "protein_id": "1E6I",
+    "starting_peptide": "AKRHR",
+    "num_peptides": 1,
+    "all_peptides": [
+      "AKRHR"
+    ],
+    "designed_binder": "GRWRC",
+    "all_designed_peptides": [
+      "GRWRC"
+    ],
+    "target_motifs": "22,23,27,32,38,75,76,77,78,79,84",
+    "all_motifs": [
+      "22,23,27,32,38,75,76,77,78,79,84"
+    ],
+    "designed_iptm": 0.66,
+    "designed_vina_score": -7.0,
+    "site_matching": "yes",
+    "binding_affinity": -7.4
+  },
+  "2LTV": {
+    "protein_id": "2LTV",
+    "starting_peptide": "SPPPPYSRYPMD",
+    "num_peptides": 1,
+    "all_peptides": [
+      "SPPPPYSRYPMD"
+    ],
+    "designed_binder": "PTVEECSYWYHE",
+    "all_designed_peptides": [
+      "PTVEECSYWYHE"
+    ],
+    "target_motifs": "11,12,13,17,19,20,21,24,26,28",
+    "all_motifs": [
+      "11,12,13,17,19,20,21,24,26,28"
+    ],
+    "designed_iptm": 0.6,
+    "designed_vina_score": -4.6,
+    "site_matching": "yes, vina structure stretches more",
+    "binding_affinity": -3.4
+  },
+  "2Q8Y": {
+    "protein_id": "2Q8Y",
+    "starting_peptide": "QYFMTEYVA",
+    "num_peptides": 1,
+    "all_peptides": [
+      "QYFMTEYVA"
+    ],
+    "designed_binder": "WLSWCHVYC",
+    "all_designed_peptides": [
+      "WLSWCHVYC"
+    ],
+    "target_motifs": "56,57,58,59,71,75,77,105,119,127,129,131,184,186,191",
+    "all_motifs": [
+      "56,57,58,59,71,75,77,105,119,127,129,131,184,186,191"
+    ],
+    "designed_iptm": 0.69,
+    "designed_vina_score": -5.2,
+    "site_matching": "yes",
+    "binding_affinity": -7.3
+  },
+  "3IDJ": {
+    "protein_id": "3IDJ",
+    "starting_peptide": "ELDAWAS",
+    "num_peptides": 1,
+    "all_peptides": [
+      "ELDAWAS"
+    ],
+    "designed_binder": "IRRVRAP",
+    "all_designed_peptides": [
+      "IRRVRAP"
+    ],
+    "target_motifs": "33,54,60,100,103,113,116",
+    "all_motifs": [
+      "33,54,60,100,103,113,116"
+    ],
+    "designed_iptm": 0.69,
+    "designed_vina_score": -6.5,
+    "site_matching": "yes",
+    "binding_affinity": -6.3
+  },
+  "4GNE": {
+    "protein_id": "4GNE",
+    "starting_peptide": "ARTKQTA",
+    "num_peptides": 1,
+    "all_peptides": [
+      "ARTKQTA"
+    ],
+    "designed_binder": "ARRVRWS",
+    "all_designed_peptides": [
+      "ARRVRWS"
+    ],
+    "target_motifs": "5,6,14,15,16,17,18,19,40,42",
+    "all_motifs": [
+      "5,6,14,15,16,17,18,19,40,42"
+    ],
+    "designed_iptm": 0.83,
+    "designed_vina_score": -5.3,
+    "site_matching": "not quite, overlapped on one end, close enough",
+    "binding_affinity": -5.4
+  },
+  "5AZ8": {
+    "protein_id": "5AZ8",
+    "starting_peptide": "PRLSRLLSYAG",
+    "num_peptides": 1,
+    "all_peptides": [
+      "PRLSRLLSYAG"
+    ],
+    "designed_binder": "LRWEVYLVREV",
+    "all_designed_peptides": [
+      "LRWEVYLVREV"
+    ],
+    "target_motifs": "46,50,69,70,71,72,73,335,336,337,339,340,343,362,365,366,369,373,376,377,380,381,384,406,411,412,414,415,416,418",
+    "all_motifs": [
+      "46,50,69,70,71,72,73,335,336,337,339,340,343,362,365,366,369,373,376,377,380,381,384,406,411,412,414,415,416,418"
+    ],
+    "designed_iptm": 0.8,
+    "designed_vina_score": -6.9,
+    "site_matching": "yes",
+    "binding_affinity": -7.2
+  },
+  "5KRI": {
+    "protein_id": "5KRI",
+    "starting_peptide": "KHKILHRLLQDSSS",
+    "num_peptides": 1,
+    "all_peptides": [
+      "KHKILHRLLQDSSS"
+    ],
+    "designed_binder": "FAGMIVVNCIMR",
+    "all_designed_peptides": [
+      "FAGMIVVNCIMR"
+    ],
+    "target_motifs": "52,56,66,70,74,223,224,227",
+    "all_motifs": [
+      "52,56,66,70,74,223,224,227"
+    ],
+    "designed_iptm": 0.84,
+    "designed_vina_score": -3.6,
+    "site_matching": "yes",
+    "binding_affinity": -3.8
+  },
+  "5M02": {
+    "protein_id": "5M02",
+    "starting_peptide": "KAPFNFATM",
+    "num_peptides": 1,
+    "all_peptides": [
+      "KAPFNFATM"
+    ],
+    "designed_binder": "PEVRWEVRD",
+    "all_designed_peptides": [
+      "PEVRWEVRD"
+    ],
+    "target_motifs": "93,94,95,96,97,98",
+    "all_motifs": [
+      "93,94,95,96,97,98"
+    ],
+    "designed_iptm": 0.6,
+    "designed_vina_score": -4.1,
+    "site_matching": "not quite, cross, probably in the same cavity",
+    "binding_affinity": -6.1
+  },
+  "6MLC": {
+    "protein_id": "6MLC",
+    "starting_peptide": "GAKRHR",
+    "num_peptides": 1,
+    "all_peptides": [
+      "GAKRHR"
+    ],
+    "designed_binder": "GRWYCW",
+    "all_designed_peptides": [
+      "GRWYCW"
+    ],
+    "target_motifs": "30,31,40,41,42,43,44,45,46,47,48,49,55,66,69,70,73,77",
+    "all_motifs": [
+      "30,31,40,41,42,43,44,45,46,47,48,49,55,66,69,70,73,77"
+    ],
+    "designed_iptm": 0.8,
+    "designed_vina_score": -6.6,
+    "site_matching": "yes",
+    "binding_affinity": -5.5
+  },
+  "7JVS": {
+    "protein_id": "7JVS",
+    "starting_peptide": "KLNLQFFASKK",
+    "num_peptides": 1,
+    "all_peptides": [
+      "KLNLQFFASKK"
+    ],
+    "designed_binder": "CVGIICEIICP",
+    "all_designed_peptides": [
+      "CVGIICEIICP"
+    ],
+    "target_motifs": "1,18,19,20,21,22,23,25,26,27,28,29,30,31,33,34,35,36,37,38,40,41,42,59,60,61,62,63,64,65,66",
+    "all_motifs": [
+      "1,18,19,20,21,22,23,25,26,27,28,29,30,31,33,34,35,36,37,38,40,41,42,59,60,61,62,63,64,65,66"
+    ],
+    "designed_iptm": 0.54,
+    "designed_vina_score": -8.1,
+    "site_matching": "yes",
+    "binding_affinity": -5.5
+  },
+  "7LUL": {
+    "protein_id": "7LUL",
+    "starting_peptide": "RWYERWV",
+    "num_peptides": 1,
+    "all_peptides": [
+      "RWYERWV"
+    ],
+    "designed_binder": "WEVTIWV",
+    "all_designed_peptides": [
+      "WEVTIWV"
+    ],
+    "target_motifs": "13,14,16,17,18,19,25,26,28,40,42,70",
+    "all_motifs": [
+      "13,14,16,17,18,19,25,26,28,40,42,70"
+    ],
+    "designed_iptm": 0.89,
+    "designed_vina_score": -6.8,
+    "site_matching": "yes",
+    "binding_affinity": -7.2
+  },
+  "8CN1": {
+    "protein_id": "8CN1",
+    "starting_peptide": "ETEV",
+    "num_peptides": 1,
+    "all_peptides": [
+      "ETEV"
+    ],
+    "designed_binder": "SAEV",
+    "all_designed_peptides": [
+      "SAEV"
+    ],
+    "target_motifs": "16,18,19,20,35,68,72,75",
+    "all_motifs": [
+      "16,18,19,20,35,68,72,75"
+    ],
+    "designed_iptm": 0.93,
+    "designed_vina_score": -6.0,
+    "site_matching": "yes",
+    "binding_affinity": -6.2
+  }
+}

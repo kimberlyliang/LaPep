@@ -166,9 +166,9 @@ def _evaluate_configuration(
     metrics['constraint_satisfaction'] = constraint_satisfaction
     
     # Prompt alignment (if language is used)
-    if prompt is not None and text_encoder is not None:
+    if prompt is not None and text_encoder is not None and preference_net is not None:
         prompt_alignment = _compute_prompt_alignment(
-            samples, text_encoder, preference_net, prompt
+            samples, text_encoder, preference_net, predictors, prompt
         )
         metrics['prompt_alignment'] = prompt_alignment
     else:
@@ -249,6 +249,7 @@ def _compute_prompt_alignment(
     samples: List[str],
     text_encoder,
     preference_net,
+    predictors: Dict,
     prompt: str
 ) -> float:
     """
@@ -256,20 +257,33 @@ def _compute_prompt_alignment(
     
     Uses the preference network to score samples under the prompt.
     """
-    # Encode prompt
-    prompt_embedding = text_encoder.encode(prompt)
-    preference_params = preference_net(prompt_embedding)
+    from lapep.potential import compute_preference_score
     
-    # Score samples
+    # Pre-compute eta once for efficiency
+    prompt_embedding = text_encoder.encode(prompt)
+    if isinstance(prompt_embedding, torch.Tensor):
+        if len(prompt_embedding.shape) == 1:
+            prompt_embedding = prompt_embedding.unsqueeze(0)
+    eta = preference_net(prompt_embedding)
+    
+    # Score samples using preference functional R(x;t) = G_η(u(x))
     scores = []
     for sample in samples:
-        # This would compute R(x;t) using the preference functional
-        # For now, use a placeholder
-        score = 0.0  # Placeholder
+        # Compute preference score R(x;t) using normalized predictor coordinates
+        score = compute_preference_score(
+            sample,
+            predictors=predictors,
+            use_linear_preferences=False,
+            eta=eta
+        )
         scores.append(score)
     
-    # Return mean alignment score
-    return np.mean(scores) if scores else 0.0
+    # Return mean alignment score (normalized to [0, 1] if needed)
+    mean_score = np.mean(scores) if scores else 0.0
+    # Normalize to reasonable range (assuming scores are typically in [-10, 10])
+    # Use sigmoid-like normalization for better interpretability
+    normalized = 1.0 / (1.0 + np.exp(-mean_score / 2.0))  # Soft sigmoid
+    return float(normalized)
 
 
 def _compute_stability_metric(

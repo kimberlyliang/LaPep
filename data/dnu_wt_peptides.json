@@ -1,0 +1,23 @@
+{
+    "GLP-1R": {
+      "protein_id": "GLP-1R",
+      "starting_peptide": "HAEGTFTSDVSSYLEGQAAKEFIAWLVKGR"
+    },
+    "AMHR2": {
+      "protein_id": "AMHR2",
+      "starting_peptide": "KDLQALDLQER"
+    },
+    "OX1R": {
+      "protein_id": "OX1R",
+      "starting_peptide": "GILTLF"
+    },
+    "MYC": {
+      "protein_id": "MYC",
+      "starting_peptide": "RRWQWR"
+    },
+    "EWS::FLI1": {
+      "protein_id": "EWS::FLI1",
+      "starting_peptide": "RRWRRW"
+    }
+  }
+  

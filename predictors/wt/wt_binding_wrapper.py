@@ -58,7 +58,10 @@ class WTBindingPredictor:
             self.esm_model = None
     
     def _get_protein_embedding(self, protein_seq: str):
-        """Get protein embedding using ESM."""
+        """Get protein embedding using ESM.
+        
+        Returns full sequence representation (batch, seq_len, dim) for model compatibility.
+        """
         if self.esm_model is None:
             return None
         
@@ -70,10 +73,32 @@ class WTBindingPredictor:
             
             with torch.no_grad():
                 results = self.esm_model(batch_tokens, repr_layers=[33])
-                protein_emb = results["representations"][33].mean(dim=1)  # Average pooling
+                # Return full sequence representation: (batch, seq_len, 1280)
+                protein_emb = results["representations"][33]
                 return protein_emb
         except Exception as e:
             print(f"Warning: Could not get protein embedding: {e}")
+            return None
+    
+    def _get_peptide_embedding(self, peptide_seq: str):
+        """Get peptide embedding using ESM (same as protein embedding)."""
+        if self.esm_model is None:
+            return None
+        
+        try:
+            batch_converter = self.esm_alphabet.get_batch_converter()
+            data = [("peptide", peptide_seq)]
+            _, _, batch_tokens = batch_converter(data)
+            batch_tokens = batch_tokens.to(self.device)
+            
+            with torch.no_grad():
+                results = self.esm_model(batch_tokens, repr_layers=[33])
+                # Return full sequence representation (batch, seq_len, dim)
+                # Model expects (seq_len, batch, dim) after transpose
+                peptide_emb = results["representations"][33]  # Shape: (batch, seq_len, 1280)
+                return peptide_emb
+        except Exception as e:
+            print(f"Warning: Could not get peptide embedding: {e}")
             return None
     
     def predict(self, peptide: str) -> float:
@@ -94,27 +119,37 @@ class WTBindingPredictor:
             print("Warning: No protein sequence provided for binding prediction")
             return np.random.uniform(6.0, 8.0)
         
-        # Get protein embedding
+        # Get protein embedding (batch, seq_len, 1280)
         protein_emb = self._get_protein_embedding(self.protein_seq)
         if protein_emb is None:
             return np.random.uniform(6.0, 8.0)
         
-        # Get peptide embedding (simplified - would need proper peptide embedding)
-        # For now, use a placeholder
-        # In practice, you'd need to convert WT peptide to SMILES or use a peptide encoder
+        # Get peptide embedding (batch, seq_len, 1280)
+        peptide_emb = self._get_peptide_embedding(peptide)
+        if peptide_emb is None:
+            return np.random.uniform(6.0, 8.0)
+        
         try:
-            # This is a placeholder - actual implementation would need peptide encoder
-            peptide_emb = torch.randn(1, 1280).to(self.device)  # Placeholder
-            
             with torch.no_grad():
-                # Model expects (batch, seq_len, dim) for both
-                # Adjust shapes as needed for your model
+                # Model forward expects:
+                # - protein_emb: (batch, seq_len, dim) -> projected -> transposed to (seq_len, batch, dim)
+                # - binder_emb: (batch, seq_len, dim) -> projected -> transposed to (seq_len, batch, dim)
+                # Both should be (batch, seq_len, 1280) where 1280 is ESM dimension
+                
                 affinity = self.model(protein_emb, peptide_emb)
+                
                 if isinstance(affinity, torch.Tensor):
-                    affinity = affinity.cpu().item()
+                    if affinity.dim() > 0:
+                        affinity = affinity.squeeze()
+                    if isinstance(affinity, torch.Tensor):
+                        affinity = affinity.cpu().item()
+                    else:
+                        affinity = float(affinity)
                 return float(affinity)
         except Exception as e:
             print(f"Warning: Binding prediction failed: {e}")
+            import traceback
+            traceback.print_exc()
             return np.random.uniform(6.0, 8.0)
     
     def normalize(self, value: float) -> float:

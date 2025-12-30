@@ -195,17 +195,81 @@ def _sample_with_direct_guidance(
     preference_net,
     predictors: Dict,
     prompt: str,
-    constraint_strength: float
+    constraint_strength: float,
+    num_steps: int = 50
 ) -> str:
     """
     Sample using non-conservative direct guidance (baseline for ablation).
     
-    This applies language and predictor signals directly to token logits
-    without the conservative reweighting scheme.
+    This applies language and predictor signals directly to proposal probabilities
+    without the conservative reweighting scheme. Instead of using the LaPep kernel
+    that ensures path independence, we directly reweight proposals by exp(-U(x;t)).
+    
+    This is the "naive guidance" baseline that applies signals directly without
+    conservative reweighting.
     """
-    # This would implement naive guidance
-    # For now, return a placeholder
-    return base_generator.sample_unconditioned()
+    import numpy as np
+    from lapep.potential import compute_potential
+    
+    # Pre-compute eta for efficiency
+    if prompt is not None and text_encoder is not None and preference_net is not None:
+        prompt_embedding = text_encoder.encode(prompt)
+        if isinstance(prompt_embedding, torch.Tensor):
+            if len(prompt_embedding.shape) == 1:
+                prompt_embedding = prompt_embedding.unsqueeze(0)
+        eta = preference_net(prompt_embedding)
+    else:
+        eta = None
+    
+    constraints = {'strength': constraint_strength}
+    
+    # Start from initial state
+    X_s = base_generator.sample_initial_state()
+    
+    # Sample for num_steps
+    for s in range(num_steps):
+        tau = s
+        
+        # Get neighbors (candidate next states)
+        neighbors = base_generator.get_neighbors(X_s)
+        C_s = neighbors + [X_s]  # Include current state
+        
+        # Compute potential for current state
+        U_X_s = compute_potential(
+            X_s, prompt, predictors, text_encoder, preference_net,
+            constraints, use_linear_preferences=False, eta=eta, language_weight=1.0
+        )
+        
+        # Compute unnormalized weights using direct guidance (non-conservative)
+        # Weight = proposal_prob * exp(-U(x';t)) / exp(-U(x;t))
+        # This directly applies the potential without conservative reweighting
+        log_weights = []
+        for x_prime in C_s:
+            # Base proposal probability
+            log_b_theta = np.log(base_generator.proposal_probability(x_prime, X_s, tau) + 1e-10)
+            
+            # Direct potential-based reweighting (non-conservative)
+            U_x_prime = compute_potential(
+                x_prime, prompt, predictors, text_encoder, preference_net,
+                constraints, use_linear_preferences=False, eta=eta, language_weight=1.0
+            )
+            
+            # Direct guidance: weight ∝ proposal * exp(-(U(x') - U(x)))
+            # This is NOT conservative - it doesn't ensure path independence
+            log_weight = log_b_theta - (U_x_prime - U_X_s)
+            log_weights.append(log_weight)
+        
+        # Normalize and sample
+        log_weights = np.array(log_weights)
+        log_weights = log_weights - np.max(log_weights)  # Numerical stability
+        weights = np.exp(log_weights)
+        weights = weights / (weights.sum() + 1e-10)
+        
+        # Sample next state
+        idx = np.random.choice(len(C_s), p=weights)
+        X_s = C_s[idx]
+    
+    return X_s
 
 
 def _compute_constraint_satisfaction(

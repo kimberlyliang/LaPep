@@ -602,23 +602,31 @@ def _estimate_circulation(
     num_cycles: int = 50
 ) -> float:
     """Estimate circulation for path independence evaluation."""
-    # Simplified circulation estimation
-    # Full implementation would use eval/circulation.py
-    circulations = []
+    from eval.circulation import evaluate_path_independence, _evaluate_naive_guidance
     
-    for _ in range(min(num_cycles, len(samples) // 2)):
-        # Sample a random cycle
-        if len(samples) < 3:
-            continue
-        
-        cycle = np.random.choice(samples, size=3, replace=False)
-        
-        # Compute edge flows (simplified)
-        # Full implementation would compute actual edge flows
-        circulation = 0.0  # Placeholder
-        circulations.append(circulation)
-    
-    return np.mean(circulations) if circulations else 0.0
+    if use_naive:
+        # Use naive guidance evaluation
+        results = _evaluate_naive_guidance(
+            generator,
+            text_encoder,
+            preference_net,
+            predictors,
+            prompt,
+            num_cycles=num_cycles
+        )
+        return results.get('mean_circulation', 0.0)
+    else:
+        # Use conservative LaPep evaluation
+        results = evaluate_path_independence(
+            generator,
+            text_encoder,
+            preference_net,
+            predictors,
+            prompt,
+            num_cycles=num_cycles,
+            cycle_length=4
+        )
+        return results.get('mean_circulation', 0.0)
 
 
 # ============================================================================

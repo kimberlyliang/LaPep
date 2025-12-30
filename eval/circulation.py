@@ -445,17 +445,119 @@ def _evaluate_naive_guidance(
 ) -> Dict[str, float]:
     """
     Evaluate a non-conservative baseline that applies language guidance directly
-    to token logits without the conservative reweighting.
+    to proposal probabilities without the conservative reweighting.
+    
+    This computes circulation for naive guidance (direct potential reweighting),
+    which should show non-zero circulation due to path dependence.
     """
-    # This would implement a naive guidance scheme
-    # For now, return placeholder
+    np.random.seed(42)
+    torch.manual_seed(42)
+    
+    circulations = []
+    
+    # Pre-compute eta for efficiency
+    if prompt is not None and text_encoder is not None and preference_net is not None:
+        prompt_embedding = text_encoder.encode(prompt)
+        if isinstance(prompt_embedding, torch.Tensor):
+            if len(prompt_embedding.shape) == 1:
+                prompt_embedding = prompt_embedding.unsqueeze(0)
+        eta = preference_net(prompt_embedding)
+    else:
+        eta = None
+    
+    # Sample random cycles
+    for _ in range(num_cycles):
+        cycle = _sample_random_cycle(base_generator, 4)
+        if cycle is None or len(cycle) < 2:
+            continue
+        
+        # Compute circulation using naive guidance kernel
+        circ = _compute_naive_guidance_circulation(
+            cycle,
+            base_generator,
+            text_encoder,
+            preference_net,
+            predictors,
+            prompt,
+            eta
+        )
+        circulations.append(circ)
+    
+    if len(circulations) == 0:
+        return {
+            'mean_circulation': 0.0,
+            'std_circulation': 0.0,
+            'max_circulation': 0.0,
+            'min_circulation': 0.0,
+            'zero_circulation_ratio': 1.0
+        }
+    
+    circulations = np.array(circulations)
+    
     return {
-        'mean_circulation': 0.0,
-        'std_circulation': 0.0,
-        'max_circulation': 0.0,
-        'min_circulation': 0.0,
-        'zero_circulation_ratio': 0.0
+        'mean_circulation': float(np.mean(circulations)),
+        'std_circulation': float(np.std(circulations)),
+        'max_circulation': float(np.max(np.abs(circulations))),
+        'min_circulation': float(np.min(circulations)),
+        'zero_circulation_ratio': float(np.mean(np.abs(circulations) < 1e-6))
     }
+
+
+def _compute_naive_guidance_circulation(
+    cycle: List[str],
+    base_generator,
+    text_encoder,
+    preference_net,
+    predictors: Dict,
+    prompt: str,
+    eta: Optional[any] = None
+) -> float:
+    """
+    Compute cycle circulation for naive guidance kernel.
+    
+    Naive guidance uses direct potential reweighting:
+    P_naive(x'|x) ∝ b_θ(x'|x) * exp(-U(x';t)) / exp(-U(x;t))
+    
+    This is NOT conservative and will generally have non-zero circulation.
+    """
+    if len(cycle) < 2:
+        return 0.0
+    
+    # Close the cycle
+    cycle_closed = cycle + [cycle[0]]
+    
+    # Compute log probability product around cycle
+    log_prob_product = 0.0
+    
+    constraints = {'strength': 1.0}
+    
+    for i in range(len(cycle_closed) - 1):
+        x = cycle_closed[i]
+        x_prime = cycle_closed[i + 1]
+        
+        # Base proposal probability
+        tau = 0  # Use fixed tau for simplicity
+        log_b_theta = np.log(base_generator.proposal_probability(x_prime, x, tau) + 1e-10)
+        
+        # Naive guidance: direct potential reweighting
+        U_x = compute_potential(
+            x, prompt, predictors, text_encoder, preference_net,
+            constraints, use_linear_preferences=False, eta=eta, language_weight=1.0
+        )
+        U_x_prime = compute_potential(
+            x_prime, prompt, predictors, text_encoder, preference_net,
+            constraints, use_linear_preferences=False, eta=eta, language_weight=1.0
+        )
+        
+        # Naive guidance transition probability (non-conservative)
+        log_P_naive = log_b_theta - (U_x_prime - U_x)
+        
+        log_prob_product += log_P_naive
+    
+    # Circulation = log probability product (should be non-zero for naive guidance)
+    circulation = log_prob_product
+    
+    return float(circulation)
 
 
 def format_circulation_table(

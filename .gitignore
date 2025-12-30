@@ -54,5 +54,8 @@ eval_results/
 # Local TR2-D2 copy (we use lapep/tr2d2 instead)
 tr2d2-pep/
 
+# HuggingFace cache (should not be in git)
+.cache/
+
 *.ckpt
 *.png

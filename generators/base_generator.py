@@ -21,21 +21,10 @@ class BaseGenerator(ABC):
         return self.sample_initial_state()
 
 
-def load_base_generator(path: str, device: str = 'cpu') -> BaseGenerator:
-    from pathlib import Path
-    model_path = Path(path)
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {path}")
-    
-    print(f"Found model file: {path} ({model_path.stat().st_size / 1e9:.2f} GB)")
-    
-    from .peptune_wrapper import load_peptune_generator, TR2D2_AVAILABLE
-    generator = load_peptune_generator(path, device=device)
-    
-    if generator.model is None:
-        if not TR2D2_AVAILABLE:
-            raise RuntimeError(
-                "Failed to load PepMDLM model: TR2-D2 modules could not be imported.\n"
-                "Install with: pip install pandas pytorch-lightning fair-esm hydra-core omegaconf torchmetrics timm SmilesPE fsspec"
-            )
-    return generator
+# Note: load_base_generator() has been removed.
+# Use load_peptune_generator() or load_dfm_model() directly based on generator_type.
+# Example:
+#   if generator_type == 'pepmdlm':
+#       generator = load_peptune_generator(config['base_generator_path'], device=device)
+#   elif generator_type == 'pepdfm':
+#       generator = load_dfm_model(config['dfm_model_path'], device=device)

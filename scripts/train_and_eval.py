@@ -15,10 +15,9 @@ eval_spec = importlib.util.spec_from_file_location("run_eval", Path(__file__).pa
 eval_module = importlib.util.module_from_spec(eval_spec)
 eval_spec.loader.exec_module(eval_module)
 from language.preference_net import PreferenceNet, load_preference_net
-from generators.base_generator import load_base_generator
 from language.text_encoder import load_text_encoder
 from predictors.loader import load_predictors
-from generators.diffusion_wrapper import load_diffusion_model
+from generators.peptune_wrapper import load_peptune_generator
 from generators.dfm_wrapper import load_dfm_model
 
 
@@ -54,7 +53,23 @@ def load_models_with_custom_preference_net(
     with open(config_path, 'r') as f:
         config = json.load(f)
     
-    base_generator = load_base_generator(config['base_generator_path'], device=device)
+    # Determine generator type and load appropriate generator
+    generator_type = config.get('generator_type', config.get('base_generator_type', 'pepmdlm'))
+    
+    if generator_type == 'pepdfm':
+        base_generator = load_dfm_model(
+            config.get('dfm_model_path'),
+            device=device
+        )
+        if base_generator is None:
+            raise RuntimeError(f"Failed to load PepDFM model from {config.get('dfm_model_path')}")
+    else:
+        base_generator = load_peptune_generator(
+            config['base_generator_path'],
+            device=device
+        )
+        if base_generator.model is None:
+            raise RuntimeError(f"Failed to load PepMDLM model from {config['base_generator_path']}")
     text_encoder = load_text_encoder(config['text_encoder_name'], device=device)
     test_embedding = text_encoder.encode("test")
     actual_embedding_dim = test_embedding.shape[-1]
@@ -154,7 +169,21 @@ def main():
             protein_seq=config.get('protein_seq')
         )
         
-        base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
+        # Load generator based on type
+        if generator_type == 'pepdfm':
+            base_generator = load_dfm_model(
+                config.get('dfm_model_path'),
+                device=actual_device
+            )
+            if base_generator is None:
+                raise RuntimeError(f"Failed to load PepDFM model from {config.get('dfm_model_path')}")
+        else:
+            base_generator = load_peptune_generator(
+                config['base_generator_path'],
+                device=actual_device
+            )
+            if base_generator.model is None:
+                raise RuntimeError(f"Failed to load PepMDLM model from {config['base_generator_path']}")
         prompts = config.get('training_prompts', [
             "Generate a peptide with high binding affinity and low toxicity",
             "Generate a stable peptide with long half-life",
@@ -267,6 +296,8 @@ def main():
             device=actual_device
         )
     
+    # Note: generator_type is determined inside load_models_with_custom_preference_net
+    
     experiments_to_run = args.experiments
     if 'all' in experiments_to_run:
         experiments_to_run = ['4.1', '4.2', '4.3', '4.4', '4.5']
@@ -299,14 +330,35 @@ def main():
     if '4.5' in experiments_to_run:
         print("\n[Evaluation] Running Experiment 4.5: Generality Across Base Generators...")
         
-        base_generators = {
-            'masked_discrete_diffusion': load_diffusion_model(config.get('diffusion_model_path')),
-            'discrete_flow_matching': load_dfm_model(config.get('dfm_model_path'))
-        }
+        base_generators = {}
         
-        eval_module.run_experiment_4_5(
-            base_generators, text_encoder, preference_net, predictors, eval_output_dir
-        )
+        # Always include the main generator (PepMDLM) for comparison
+        base_generators['pepmdlm'] = base_generator
+        
+        # Try to load PepDFM (flow matching) if available
+        # Note: This is a different generator type (WT amino acids) vs PepMDLM (SMILES)
+        try:
+            if config.get('dfm_model_path'):
+                dfm_generator = load_dfm_model(
+                    config.get('dfm_model_path'),
+                    device=actual_device
+                )
+                if dfm_generator is not None:
+                    base_generators['pepdfm'] = dfm_generator
+                    print(f"[Experiment 4.5] ✓ Loaded PepDFM (flow matching)")
+        except Exception as e:
+            print(f"[Experiment 4.5] Skipping PepDFM model: {e}")
+        
+        if len(base_generators) < 2:
+            print(f"\n[Experiment 4.5] Warning: Only {len(base_generators)} generator(s) available.")
+            print("Experiment 4.5 requires multiple generators for comparison.")
+            print("Available generators:", list(base_generators.keys()))
+            print("Skipping experiment 4.5.")
+        else:
+            print(f"[Experiment 4.5] Comparing {len(base_generators)} generators: {list(base_generators.keys())}")
+            eval_module.run_experiment_4_5(
+                base_generators, text_encoder, preference_net, predictors, eval_output_dir
+            )
     
     print("\n" + "=" * 80)
     print("✓ All experiments completed!")

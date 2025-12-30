@@ -130,13 +130,29 @@ def main():
     with open(args.config, 'r') as f:
         config = json.load(f)
     
-    from generators.base_generator import load_base_generator
+    from generators.peptune_wrapper import load_peptune_generator
+    from generators.dfm_wrapper import load_dfm_model
     from language.text_encoder import load_text_encoder
     from predictors.binding import BindingPredictor
     from predictors.toxicity import ToxicityPredictor
     from predictors.halflife import HalfLifePredictor
     
-    base_generator = load_base_generator(config['base_generator_path'], device=args.device)
+    generator_type = config.get('generator_type', config.get('base_generator_type', 'pepmdlm'))
+    
+    if generator_type == 'pepdfm':
+        base_generator = load_dfm_model(
+            config.get('dfm_model_path'),
+            device=args.device
+        )
+        if base_generator is None:
+            raise RuntimeError(f"Failed to load PepDFM model from {config.get('dfm_model_path')}")
+    else:
+        base_generator = load_peptune_generator(
+            config['base_generator_path'],
+            device=args.device
+        )
+        if base_generator.model is None:
+            raise RuntimeError(f"Failed to load PepMDLM model from {config['base_generator_path']}")
     text_encoder = load_text_encoder(config['text_encoder_name'], device=args.device)
     
     # Check embedding dimension matches checkpoint

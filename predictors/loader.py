@@ -113,11 +113,17 @@ def load_predictors(
             print("  ⚠ Hemolysis predictor not available for WT format, skipping")
         else:  # SMILES
             from predictors.smiles.hemolysis import HemolysisPredictor
-            predictors['hemolysis'] = HemolysisPredictor.load(
-                pred_config.get('path'),
-                device=device
-            )
-            print(f"  ✓ Hemolysis predictor loaded ({format_type})")
+            hemolysis_path = pred_config.get('path')
+            # Handle null/None path - use placeholder
+            if hemolysis_path is None or hemolysis_path == 'null':
+                predictors['hemolysis'] = HemolysisPredictor(model=None, device=device)
+                print(f"  ✓ Hemolysis predictor loaded ({format_type}) - using placeholder")
+            else:
+                predictors['hemolysis'] = HemolysisPredictor.load(
+                    hemolysis_path,
+                    device=device
+                )
+                print(f"  ✓ Hemolysis predictor loaded ({format_type})")
     
     print(f"\n[Predictors] Loaded {len(predictors)} predictor(s)")
     return predictors

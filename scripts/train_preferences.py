@@ -1089,9 +1089,24 @@ def main():
     )
     
     # Load frozen base generator
-    print(f"\n[Base Generator] Loading base generator from: {config['base_generator_path']}")
-    from generators.base_generator import load_base_generator
-    base_generator = load_base_generator(config['base_generator_path'], device=actual_device)
+    print(f"\n[Base Generator] Loading {generator_type.upper()} generator...")
+    from generators.peptune_wrapper import load_peptune_generator
+    from generators.dfm_wrapper import load_dfm_model
+    
+    if generator_type == 'pepdfm':
+        generator_path = config.get('dfm_model_path')
+        if generator_path is None:
+            raise ValueError("dfm_model_path not specified in config for generator_type='pepdfm'")
+        base_generator = load_dfm_model(generator_path, device=actual_device)
+        if base_generator is None:
+            raise RuntimeError(f"Failed to load PepDFM model from {generator_path}")
+    else:
+        generator_path = config.get('base_generator_path')
+        if generator_path is None:
+            raise ValueError("base_generator_path not specified in config")
+        base_generator = load_peptune_generator(generator_path, device=actual_device)
+        if base_generator.model is None:
+            raise RuntimeError(f"Failed to load PepMDLM model from {generator_path}")
     print(f"[Base Generator] Loaded successfully")
     
     # here are defaults but can also be defined in the config file 

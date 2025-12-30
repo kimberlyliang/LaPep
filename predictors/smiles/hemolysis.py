@@ -61,18 +61,23 @@ class HemolysisPredictor:
         return np.linspace(0.0, 1.0, 1000)
     
     @classmethod
-    def load(cls, path: str, device: Optional[str] = None):
+    def load(cls, path: Optional[str] = None, device: Optional[str] = None):
         """
         Load hemolysis predictor from file.
         
         Args:
-            path: Path to model file (.pkl or .pt)
+            path: Path to model file (.pkl or .pt), or None for placeholder
             device: Device to load model on
             
         Returns:
             HemolysisPredictor instance
         """
         device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Handle None/null path - use placeholder
+        if path is None or path == 'null':
+            print("Hemolysis predictor: Using placeholder (hash-based deterministic values)")
+            return cls(model=None, device=device)
         
         model_path = Path(path)
         if not model_path.exists():

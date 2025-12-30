@@ -321,7 +321,8 @@ def run_experiment_4_5(
     text_encoder,
     preference_net,
     predictors,
-    output_dir: Path
+    output_dir: Path,
+    config: dict = None
 ):
     """Run Section 4.5: Generality Across Base Generators."""
     print("\n" + "="*80)
@@ -330,6 +331,10 @@ def run_experiment_4_5(
     
     prompt = "Generate a peptide with high binding affinity and low toxicity"
     results = {}
+    
+    # Note: Predictors are loaded based on main generator type (SMILES for PepMDLM)
+    # For PepDFM (WT), predictors should handle format conversion internally
+    # or evaluation functions will convert as needed
     
     for gen_name, base_generator in base_generators.items():
         print(f"\nEvaluating {gen_name}...")
@@ -514,7 +519,7 @@ def main():
         else:
             print(f"[Experiment 4.5] Comparing {len(base_generators)} generators: {list(base_generators.keys())}")
             run_experiment_4_5(
-                base_generators, text_encoder, preference_net, predictors, output_dir
+                base_generators, text_encoder, preference_net, predictors, output_dir, config=config
             )
     
     print("\n" + "="*80)
